@@ -1,20 +1,72 @@
 """Module to hande queue population"""
 
+import sys
+
+import os
+
 import asyncio
 import json
 import logging
 
 from automation_server_client import Workqueue
 
-from helpers import config
+from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
+
+from helpers import config, helper_functions
+
+SOLTEQ_TAND_DB_CONN_STRING = os.getenv("DBCONNECTIONSTRINGSOLTEQTAND")
+
 
 logger = logging.getLogger(__name__)
 
 
 def retrieve_items_for_queue() -> list[dict]:
     """Function to populate queue"""
-    data = []
+
     references = []
+    data = []
+
+    db_handler = SolteqTandDatabase(conn_str=SOLTEQ_TAND_DB_CONN_STRING)
+
+    filters = {
+        "e.currentStateText": [
+            # "Ny tilflytter",
+            # "Kendt tilflytter",
+            "TEST: Ny tilflytter",
+        ],
+        "e.archived": 0
+    }
+
+    events = helper_functions.find_events(db_handler=db_handler, filters=filters)
+
+    print()
+
+    print(f"len of events: {len(events)}")
+
+    print()
+
+    for ev in events:
+        print(ev)
+
+        ev_title = ev.get("currentStateText")
+
+        citizen_cpr = ev.get("cpr")
+
+        event_created_date = ev.get("currentStateDate")
+
+        citizen_dict = {
+            "cpr": citizen_cpr,
+            "name": ev.get("fullName"),
+            "event_name": ev_title,
+            "event_created_date": event_created_date.isoformat(),
+            "event_last_modified": ev.get("timestamp").isoformat()
+        }
+
+        references.append(citizen_cpr)
+
+        data.append(citizen_dict)
+
+        break
 
     items = [
         {"reference": ref, "data": d} for ref, d in zip(references, data, strict=True)
