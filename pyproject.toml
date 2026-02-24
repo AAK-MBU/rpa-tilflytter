@@ -1,6 +1,6 @@
 [project]
-name = "process-template"
-version = "0.0.0"
+name = "rpa_tilflytter"
+version = "0.0.1"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -11,7 +11,7 @@ dependencies = [
     "pillow",
     "ruff",
 
-    "mbu-solteqtand-shared-components>=1.1.1",
+    "mbu-solteqtand-shared-components>=1.2.1",
     "mbu_msoffice_integration>=1.0.1",
     "mbu-rpa-core",
     "mbu-process-dashboard-shared-components>=1.2.0",
@@ -19,6 +19,11 @@ dependencies = [
     "sqlalchemy >= 2.0.20",
     "sqlalchemy[asyncio] >= 2.0.20",
     "psutil",
+
+    "mbu-dev-shared-components[solteqtand]>=4.2.1",
+    "itk_dev_shared_components",
+    "tzdata",
+    "openpyxl",
 ]
 
 [tool.uv.sources]

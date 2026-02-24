@@ -30,8 +30,8 @@ load_dotenv()
 if "--tilflytter_registreret" in sys.argv:
     os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_TILFLYTTER_REGISTRERET")
 
-# elif "--faglig_vurdering_udfoert" in sys.argv:
-#     os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_FAGLIG_VURDERING_UDFOERT")
+elif "--digital_post_udsendt" in sys.argv:
+    os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_DIGITAL_POST_UDSENDT")
 
 # elif "--aftale_oprettet_i_solteq" in sys.argv:
 #     os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_AFTALE_OPRETTET_I_SOLTEQ")
@@ -169,6 +169,10 @@ if __name__ == "__main__":
 
     prod_workqueue = ats.workqueue()
     process = ats.process
+
+    ### REMOVE !!! ###
+    prod_workqueue.clear_workqueue()
+    ### REMOVE !!! ###
 
     if "--queue" in sys.argv:
         asyncio.run(populate_queue(prod_workqueue))
