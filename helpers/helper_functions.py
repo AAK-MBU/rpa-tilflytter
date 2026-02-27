@@ -5,14 +5,14 @@ import sys
 import os
 import logging
 
-from dotenv import load_dotenv
-
 from datetime import date
+
+from dotenv import load_dotenv
 
 from mbu_process_dashboard_shared_components.process_dashboard_client import ProcessDashboardClient
 from mbu_process_dashboard_shared_components import (
     process_run,
-    process_step_run
+    process_step_run,
 )
 
 from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase

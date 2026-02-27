@@ -12,10 +12,11 @@ from automation_server_client import Workqueue
 
 from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
-from helpers import config, helper_functions
+from helpers import config, helper_functions, pre_process_checks
 
 SOLTEQ_TAND_DB_CONN_STRING = os.getenv("DBCONNECTIONSTRINGSOLTEQTAND")
 
+print(SOLTEQ_TAND_DB_CONN_STRING)
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,8 @@ def retrieve_items_for_queue() -> list[dict]:
 
     references = []
     data = []
+
+    pre_process_checks.main()
 
     db_handler = SolteqTandDatabase(conn_str=SOLTEQ_TAND_DB_CONN_STRING)
 

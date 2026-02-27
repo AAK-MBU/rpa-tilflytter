@@ -25,14 +25,8 @@ def process_item(item_data: dict, item_reference: str):
 
     db_conn_string = os.getenv("DBCONNECTIONSTRINGSOLTEQTAND")
 
-    print(item_reference)
-    print(item_data)
-
     citizen_cpr = item_data.get("cpr")
     citizen_name = item_data.get("name")
-    event_name = item_data.get("event_name")
-    event_created_date = item_data.get("event_created_date")
-    event_last_modified = item_data.get("event_last_modified")
 
     meta = {
         "cpr": citizen_cpr,
@@ -42,36 +36,58 @@ def process_item(item_data: dict, item_reference: str):
     process_name = "Tilflytter til Aarhus Kommune"
 
     try:
-        print("begin")
+        solteq_tand_db_object = SolteqTandDatabase(conn_str=db_conn_string)
 
         solteq_app = get_app()
 
-        solteq_tand_db_object = SolteqTandDatabase(conn_str=db_conn_string)
-
-        # STEP 1 - fang borgere med tilflytter hændelse i solteq tand
-        helper_functions.handle_dashboard_run_creation(process_name=process_name, meta=meta)
-
-        helper_functions.handle_process_dashboard(status="success", item_reference=item_reference, process_step_name="Tilflytter registreret", failure=None, process_name=process_name)
-
-        # STEP 2 - udregn borgerens alder og send digital post
-        age_category = helper_functions.get_age_category(cpr=citizen_cpr)
-
         solteq_app.open_patient(ssn=citizen_cpr)
 
-        solteq_document_handler.create_welcome_document(solteq_tand_app=solteq_app, item_data=item_data, solteq_tand_db_object=solteq_tand_db_object, age_category=age_category)
+        if "--formular_ikke_indsendt_inden_for_tidsfristen" in sys.argv:
+            event_text = "Formular indsendt inden for tidsfristen"
 
-        sys.exit()
+            solteq_event_handler.check_and_create_new_event(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, event_text=event_text, cpr=citizen_cpr)
 
-        helper_functions.handle_process_dashboard(status="success", item_reference=item_reference, process_step_name="Digital post udsendt", failure=None, process_name=process_name)
+            helper_functions.handle_process_dashboard(status="cancelled", item_reference=item_reference, process_step_name="Formular indsendt inden for tidsfristen")
 
-        # STEP 3 - afvikl hændelse i Solteq Tand
-        solteq_event_handler.handle_tilflytter_event(solteq_tand_app=solteq_app, cpr=citizen_cpr, solteq_tand_db_object=solteq_tand_db_object)
+        elif "--tilflytter_overskredet_aldersgraense" in sys.argv:
+            event_text = "Tilflytter 21 år og 9 måneder - Formular ikke udfyldt"
 
-        # STEP 4 - hvis borger er 21 år og 9 måneder eller ældre --> annullér deres process run
-        if age_category == "is_21y9m_or_older":
-            helper_functions.handle_process_dashboard(status="cancelled", item_reference=item_reference, process_step_name="Tilflytter 21 år og 9 måneder", failure=None, process_name=process_name)
+            solteq_event_handler.check_and_create_new_event(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, event_text=event_text, cpr=citizen_cpr)
 
-            return
+            helper_functions.handle_process_dashboard(status="cancelled", item_reference=item_reference, process_step_name="Tilflytter under 21 år og 9 måneder")
+
+        else:
+            # STEP 1 - fang borgere med tilflytter hændelse i solteq tand
+            helper_functions.handle_dashboard_run_creation(process_name=process_name, meta=meta)
+
+            helper_functions.handle_process_dashboard(status="success", item_reference=item_reference, process_step_name="Tilflytter registreret", failure=None, process_name=process_name)
+
+            # STEP 2 - udregn borgerens alder og send digital post
+            age_category = helper_functions.get_age_category(cpr=citizen_cpr)
+
+            logger.info("Handling the creation of the welcome document")
+            document_file_name = solteq_document_handler.check_and_create_welcome_document(solteq_app=solteq_app, item_data=item_data, solteq_tand_db_object=solteq_tand_db_object, age_category=age_category)
+
+            logger.info("Handling the sending of the welcome document")
+            solteq_document_handler.check_and_send_welcome_document(solteq_app=solteq_app, item_data=item_data, solteq_tand_db_object=solteq_tand_db_object, welcome_document_filename=document_file_name)
+
+            helper_functions.handle_process_dashboard(status="success", item_reference=item_reference, process_step_name="Digital post udsendt", failure=None, process_name=process_name)
+
+            # STEP 3 - afvikl hændelse i Solteq Tand
+            solteq_event_handler.handle_tilflytter_event(solteq_app=solteq_app, cpr=citizen_cpr, solteq_tand_db_object=solteq_tand_db_object)
+
+            # STEP 4 - hvis borger er 21 år og 9 måneder eller ældre --> annullér deres process run
+            if age_category == "is_21y9m_or_older":
+                event_text = "Tilflytter 21 år og 9 måneder ved tilflytning"
+
+                solteq_event_handler.check_and_create_new_event(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, event_text=event_text, cpr=citizen_cpr)
+
+                helper_functions.handle_process_dashboard(status="cancelled", item_reference=item_reference, process_step_name="Tilflytter under 21 år og 9 måneder", failure=None, process_name=process_name)
+
+            else:
+                helper_functions.handle_process_dashboard(status="success", item_reference=item_reference, process_step_name="Tilflytter under 21 år og 9 måneder", failure=None, process_name=process_name)
+
+        solteq_app.close_patient_window()
 
     except BusinessError as be:
         logger.info(f"BusinessError: {be}")

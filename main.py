@@ -33,8 +33,8 @@ if "--tilflytter_registreret" in sys.argv:
 elif "--digital_post_udsendt" in sys.argv:
     os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_DIGITAL_POST_UDSENDT")
 
-# elif "--aftale_oprettet_i_solteq" in sys.argv:
-#     os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_AFTALE_OPRETTET_I_SOLTEQ")
+elif "--formular_ikke_indsendt_inden_for_tidsfristen" in sys.argv:
+    os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_FORMULAR_IKKE_INDSENDT")
 
 ### This block disables SSL verification and overrides env vars ###
 import requests
