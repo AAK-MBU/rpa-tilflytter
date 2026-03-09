@@ -24,27 +24,27 @@ logger = logging.getLogger(__name__)
 # ║ 🔥 REMOVE BEFORE DEPLOYMENT (TEMP OVERRIDES) 🔥 ║
 # ╚══════════════════════════════════════════════╝
 ### This block handles the workqueue id selection ###
-import os
-from dotenv import load_dotenv
-load_dotenv()
-if "--tilflytter_registreret" in sys.argv:
-    os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_TILFLYTTER_REGISTRERET")
+# import os
+# from dotenv import load_dotenv
+# load_dotenv()
+# if "--tilflytter_registreret" in sys.argv:
+#     os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_TILFLYTTER_REGISTRERET")
 
-elif "--digital_post_udsendt" in sys.argv:
-    os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_DIGITAL_POST_UDSENDT")
+# elif "--digital_post_udsendt" in sys.argv:
+#     os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_DIGITAL_POST_UDSENDT")
 
-elif "--formular_ikke_indsendt_inden_for_tidsfristen" in sys.argv:
-    os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_FORMULAR_IKKE_INDSENDT")
+# elif "--formular_ikke_indsendt_inden_for_tidsfristen" in sys.argv:
+#     os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_FORMULAR_IKKE_INDSENDT")
 
-### This block disables SSL verification and overrides env vars ###
-import requests
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-_old_request = requests.Session.request
-def unsafe_request(self, *args, **kwargs):
-    kwargs['verify'] = False
-    return _old_request(self, *args, **kwargs)
-requests.Session.request = unsafe_request
+# ### This block disables SSL verification and overrides env vars ###
+# import requests
+# import urllib3
+# urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# _old_request = requests.Session.request
+# def unsafe_request(self, *args, **kwargs):
+#     kwargs['verify'] = False
+#     return _old_request(self, *args, **kwargs)
+# requests.Session.request = unsafe_request
 # ╔══════════════════════════════════════════════╗
 # ║ 🔥 REMOVE BEFORE DEPLOYMENT (TEMP OVERRIDES) 🔥 ║
 # ╚══════════════════════════════════════════════╝
