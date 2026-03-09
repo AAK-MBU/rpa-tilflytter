@@ -1,7 +1,5 @@
 """Handle the creation of discharge documents based on patient age."""
 
-import sys
-
 import os
 
 import logging

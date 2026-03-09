@@ -1,7 +1,5 @@
 """Module to hande queue population"""
 
-import sys
-
 import os
 
 import asyncio
