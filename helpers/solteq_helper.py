@@ -1,16 +1,54 @@
 """Handle the creation of discharge documents based on patient age."""
 
+import logging
 import os
 
-import logging
-
 import datetime
-from dateutil.relativedelta import relativedelta
 
+from dateutil.relativedelta import relativedelta
 from mbu_solteqtand_shared_components.application import SolteqTandApp
 from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
+from helpers import helper_functions
+
 logger = logging.getLogger(__name__)
+
+
+# pylint: disable=protected-access
+def check_digital_post_status(cpr: str, solteq_tand_db_object: SolteqTandDatabase):
+    """
+    Check if the patient is registered for digital post
+    """
+
+    filters = {
+        "cpr": cpr,
+        "isDKALMailSubscriber": 0,
+    }
+
+    base_query = """
+        SELECT
+            *
+        FROM
+            [tmtdata_prod].[dbo].[ACTIVE_PATIENTS]
+        WHERE
+            1=1
+            AND primaryDKALRecipient IS NULL
+            AND secondaryDKALRecipient IS NULL
+    """
+
+    final_query, params = solteq_tand_db_object._construct_sql_statement(
+        base_query,
+        filters=filters,
+    )
+
+    logger.info(f"\n\nprinting sql:\n\n{final_query}\n\n")
+
+    rows = solteq_tand_db_object._execute_query(final_query, tuple(params))
+
+    if rows:
+        return False
+
+    return True
 
 
 def check_and_create_welcome_document(solteq_app: SolteqTandApp, item_data: dict, solteq_tand_db_object: SolteqTandDatabase, age_category):
@@ -20,19 +58,21 @@ def check_and_create_welcome_document(solteq_app: SolteqTandApp, item_data: dict
     """
 
     if age_category == "under_18":
-        template_name = "Velkomstbrev til forældre og patient under 18"
+        template_name = "Tilflytter 21 år 9 mdr - Velkommen"
+        # template_name = "Velkomstbrev til forældre og patient under 18"
 
-        discharge_document_filename = "Velkomstbrev"
+        welcome_document_filename = "Velkomstbrev"
 
     elif age_category == "is_21y9m_or_older":
         template_name = "Tilflytter 21 år 9 mdr - Velkommen"
 
-        discharge_document_filename = "Velkomstbrev"
+        welcome_document_filename = "Velkomstbrev"
 
     else:
-        template_name = "Velkomstbrev til ung fra 18-21 år og 8 måneder"
+        template_name = "Tilflytter 21 år 9 mdr - Velkommen"
+        # template_name = "Velkomstbrev til ung fra 18-21 år og 8 måneder"
 
-        discharge_document_filename = "Velkomstbrev"
+        welcome_document_filename = "Velkomstbrev"
 
     one_month_ago = datetime.datetime.now() - relativedelta(months=1)
 
@@ -41,7 +81,7 @@ def check_and_create_welcome_document(solteq_app: SolteqTandApp, item_data: dict
     list_of_documents = solteq_tand_db_object.get_list_of_documents(
         filters={
             "p.cpr": item_data["cpr"],
-            "ds.OriginalFilename": f"%{discharge_document_filename}%",
+            "ds.OriginalFilename": f"%{welcome_document_filename}%",
             "ds.rn": "1",
             "ds.DocumentStoreStatusId": "1",
             "ds.DocumentCreatedDate": (">=", one_month_ago),
@@ -61,7 +101,7 @@ def check_and_create_welcome_document(solteq_app: SolteqTandApp, item_data: dict
         document_template_metadata = {
             "templateName": template_name,
             "destinationPath": folder_path,
-            "dischargeDocumentFilename": discharge_document_filename,
+            "dischargeDocumentFilename": welcome_document_filename,
         }
 
         solteq_app.create_document_from_template(
@@ -73,7 +113,7 @@ def check_and_create_welcome_document(solteq_app: SolteqTandApp, item_data: dict
     else:
         logger.info("Welcome document already exists, skipping creation.")
 
-    return discharge_document_filename
+    return welcome_document_filename
 
 
 def check_and_send_welcome_document(solteq_app: SolteqTandApp, item_data: dict, solteq_tand_db_object: SolteqTandDatabase, welcome_document_filename: str):
@@ -88,7 +128,7 @@ def check_and_send_welcome_document(solteq_app: SolteqTandApp, item_data: dict, 
     # Check if the discharge document is already sent to DigitalPost; if not, send it.
     logger.info("Checking if the welcome document is already sent to DigitalPost.")
 
-    list_of_documents_send_document = solteq_tand_db_object.get_list_of_documents(
+    list_of_documents = solteq_tand_db_object.get_list_of_documents(
         filters={
             "p.cpr": item_data["cpr"],
             "ds.OriginalFilename": f"%{welcome_document_filename}%",
@@ -99,8 +139,8 @@ def check_and_send_welcome_document(solteq_app: SolteqTandApp, item_data: dict, 
     )
 
     if (
-        list_of_documents_send_document
-        and not list_of_documents_send_document[0]["SentToNemSMS"]
+        list_of_documents
+        and not list_of_documents[0]["SentToNemSMS"]
     ):
         logger.info("Discharge document not sent to DigitalPost, proceeding to send.")
 
@@ -117,3 +157,62 @@ def check_and_send_welcome_document(solteq_app: SolteqTandApp, item_data: dict, 
 
     else:
         logger.info("Welcome document already sent to DigitalPost or not found, skipping sending.")
+
+
+def check_and_handle_event(solteq_app: SolteqTandApp, cpr: str, solteq_tand_db_object: SolteqTandDatabase, event_name):
+    """
+    Afvikler den nyligt oprettede tilflytter hændelse
+    """
+
+    logger.info("Checking if event is already processed.")
+
+    filters = {
+        "e.currentStateText": [
+            f"{event_name}",
+        ],
+        "p.cpr": cpr,
+        "e.archived": 0,
+    }
+
+    events = helper_functions.find_events(db_handler=solteq_tand_db_object, filters=filters)
+
+    print()
+
+    print(f"len of events: {len(events)}")
+
+    logger.info(f"Found {len(events)} existing processed tilflytter events.")
+
+    if not events:
+        target_values = {event_name, "Henvisning", "Nej"}
+
+        solteq_app.process_target_event(target_values=target_values)
+
+        logger.info("Event was processed successfully.")
+
+    else:
+        logger.info("Event already processed, skipping processing.")
+
+
+def check_and_create_new_event(solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, event_text: str, cpr: str):
+    """
+    Check if and event exists in Solteq Tand, and create it if not
+    """
+
+    logger.info("Checking if event is already processed.")
+
+    filters = {
+        "e.currentStateText": [
+            f"{event_text}",
+        ],
+        "p.cpr": cpr
+    }
+
+    events = helper_functions.find_events(db_handler=solteq_tand_db_object, filters=filters)
+
+    if not events:
+        solteq_app.create_new_event(clinic_name="Tandplejen Aarhus", event_text=event_text)
+
+        logger.info("Event was created successfully.")
+
+    else:
+        logger.info("Event already exists.")

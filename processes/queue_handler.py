@@ -1,13 +1,11 @@
 """Module to hande queue population"""
 
-import os
-
 import asyncio
 import json
 import logging
+import os
 
 from automation_server_client import Workqueue
-
 from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
 from helpers import config, helper_functions, pre_process_checks

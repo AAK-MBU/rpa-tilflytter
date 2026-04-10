@@ -1,3 +1,5 @@
 2026-02-20 11:30:38.214 base_ui.py[112] close_window -> Find Control Timeout(10s): {Name: 'Ja', ControlType: ButtonControl}
 2026-02-20 11:31:39.136 base_ui.py[112] close_window -> Find Control Timeout(10s): {Name: 'Ja', ControlType: ButtonControl}
 2026-02-20 11:37:14.011 base_ui.py[112] close_window -> Find Control Timeout(10s): {Name: 'Ja', ControlType: ButtonControl}
+2026-04-09 13:13:23.546 event.py[159] process_tilflytter_event -> Find Control Timeout(10s): {Name: 'Nej', ControlType: ButtonControl}
+2026-04-09 13:39:50.390 event.py[159] process_tilflytter_event -> Find Control Timeout(10s): {Name: 'Nej', ControlType: ButtonControl}
