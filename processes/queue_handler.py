@@ -8,7 +8,7 @@ import os
 from automation_server_client import Workqueue
 from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
-from helpers import config, helper_functions, pre_process_checks
+from helpers import config, pre_process_checks, solteq_helper
 
 SOLTEQ_TAND_DB_CONN_STRING = os.getenv("DBCONNECTIONSTRINGSOLTEQTAND")
 
@@ -36,7 +36,7 @@ def retrieve_items_for_queue() -> list[dict]:
         "e.archived": 0
     }
 
-    events = helper_functions.find_events(db_handler=db_handler, filters=filters)
+    events = solteq_helper.find_events(db_handler=db_handler, filters=filters)
 
     print()
 

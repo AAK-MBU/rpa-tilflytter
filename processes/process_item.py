@@ -77,10 +77,10 @@ def process_item(item_data: dict, item_reference: str):
                 age_category = helper_functions.get_age_category(cpr=citizen_cpr)
 
                 logger.info("Handling the creation of the welcome document")
-                document_file_name = solteq_helper.check_and_create_welcome_document(solteq_app=solteq_app, item_data=item_data, solteq_tand_db_object=solteq_tand_db_object, age_category=age_category)
+                document_file_name = solteq_helper.check_and_create_welcome_document(item_data=item_data, solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, age_category=age_category)
 
                 logger.info("Handling the sending of the welcome document")
-                solteq_helper.check_and_send_welcome_document(solteq_app=solteq_app, item_data=item_data, solteq_tand_db_object=solteq_tand_db_object, welcome_document_filename=document_file_name)
+                solteq_helper.check_and_send_welcome_document(item_data=item_data, solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, welcome_document_filename=document_file_name)
 
                 helper_functions.handle_process_dashboard(status="success", item_reference=item_reference, process_step_name="Digital post udsendt", failure=None, process_name=process_name)
 

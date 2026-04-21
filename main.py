@@ -24,27 +24,27 @@ logger = logging.getLogger(__name__)
 # ║ 🔥 REMOVE BEFORE DEPLOYMENT (TEMP OVERRIDES) 🔥 ║
 # ╚══════════════════════════════════════════════╝
 ## This block handles the workqueue id selection ###
-import os
-from dotenv import load_dotenv
-load_dotenv()
-if "--tilflytter_registreret" in sys.argv:
-    os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_TILFLYTTER_REGISTRERET")
+# import os
+# from dotenv import load_dotenv
+# load_dotenv()
+# if "--tilflytter_registreret" in sys.argv:
+#     os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_TILFLYTTER_REGISTRERET")
 
-elif "--digital_post_udsendt" in sys.argv:
-    os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_DIGITAL_POST_UDSENDT")
+# elif "--formular_ikke_indsendt_inden_for_tidsfristen" in sys.argv:
+#     os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_FORMULAR_IKKE_INDSENDT")
 
-elif "--formular_ikke_indsendt_inden_for_tidsfristen" in sys.argv:
-    os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_FORMULAR_IKKE_INDSENDT")
+# elif "--tilflytter_overskredet_aldersgraense" in sys.argv:
+#     os.environ["ATS_WORKQUEUE_OVERRIDE"] = os.getenv("ATS_WORKQUEUE_ID_TILFLYTTER_OVERSKREDET_ALDERSGRAENSE")
 
-### This block disables SSL verification and overrides env vars ###
-import requests
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-_old_request = requests.Session.request
-def unsafe_request(self, *args, **kwargs):
-    kwargs['verify'] = False
-    return _old_request(self, *args, **kwargs)
-requests.Session.request = unsafe_request
+# ### This block disables SSL verification and overrides env vars ###
+# import requests
+# import urllib3
+# urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# _old_request = requests.Session.request
+# def unsafe_request(self, *args, **kwargs):
+#     kwargs['verify'] = False
+#     return _old_request(self, *args, **kwargs)
+# requests.Session.request = unsafe_request
 # ╔══════════════════════════════════════════════╗
 # ║ 🔥 REMOVE BEFORE DEPLOYMENT (TEMP OVERRIDES) 🔥 ║
 # ╚══════════════════════════════════════════════╝
@@ -169,13 +169,6 @@ if __name__ == "__main__":
 
     prod_workqueue = ats.workqueue()
     process = ats.process
-
-    ### DELETE
-    items = prod_workqueue.get_item_by_reference(reference="1110109996")
-    item = items[0]
-    print(item)
-    item = item.update_status(status="new")
-    ### DELETE
 
     if "--queue" in sys.argv:
         asyncio.run(populate_queue(prod_workqueue))

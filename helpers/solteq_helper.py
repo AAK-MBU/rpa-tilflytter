@@ -9,8 +9,6 @@ from dateutil.relativedelta import relativedelta
 from mbu_solteqtand_shared_components.application import SolteqTandApp
 from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
-from helpers import helper_functions
-
 logger = logging.getLogger(__name__)
 
 
@@ -51,7 +49,7 @@ def check_digital_post_status(cpr: str, solteq_tand_db_object: SolteqTandDatabas
     return True
 
 
-def check_and_create_welcome_document(solteq_app: SolteqTandApp, item_data: dict, solteq_tand_db_object: SolteqTandDatabase, age_category):
+def check_and_create_welcome_document(item_data: dict, solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, age_category):
     """
     Create a welcome document based on the patient's age.
     If the document already exists, it will not be created again.
@@ -116,7 +114,7 @@ def check_and_create_welcome_document(solteq_app: SolteqTandApp, item_data: dict
     return welcome_document_filename
 
 
-def check_and_send_welcome_document(solteq_app: SolteqTandApp, item_data: dict, solteq_tand_db_object: SolteqTandDatabase, welcome_document_filename: str):
+def check_and_send_welcome_document(item_data: dict, solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, welcome_document_filename: str):
     """
     Check if the welcome document is already sent to DigitalPost; if not, send it.
     This function checks for the existence of welcome document within the last month
@@ -174,7 +172,7 @@ def check_and_handle_event(solteq_app: SolteqTandApp, cpr: str, solteq_tand_db_o
         "e.archived": 0,
     }
 
-    events = helper_functions.find_events(db_handler=solteq_tand_db_object, filters=filters)
+    events = find_events(db_handler=solteq_tand_db_object, filters=filters)
 
     print()
 
@@ -207,7 +205,7 @@ def check_and_create_new_event(solteq_app: SolteqTandApp, solteq_tand_db_object:
         "p.cpr": cpr
     }
 
-    events = helper_functions.find_events(db_handler=solteq_tand_db_object, filters=filters)
+    events = find_events(db_handler=solteq_tand_db_object, filters=filters)
 
     if not events:
         solteq_app.create_new_event(clinic_name="Tandplejen Aarhus", event_text=event_text)
@@ -216,3 +214,43 @@ def check_and_create_new_event(solteq_app: SolteqTandApp, solteq_tand_db_object:
 
     else:
         logger.info("Event already exists.")
+
+
+# pylint: disable=protected-access
+def find_events(db_handler: SolteqTandDatabase, filters=None):
+    """
+    Helper to find events for a specific event_name
+    """
+
+    base_query = """
+        SELECT
+            e.[eventId],
+            e.[type],
+            e.[currentStateText],
+            e.[currentStateDate],
+            e.[timestamp],
+            e.[clinicId],
+            c.name,
+            e.[entityId],
+            e.[eventTriggerDate],
+            p.cpr,
+            CONCAT(p.firstName, ' ', p.lastName) as fullName,
+            e.archived
+        FROM
+            [tmtdata_prod].[dbo].[EVENT] e
+        JOIN
+            [tmtdata_prod].[dbo].[PATIENT] p ON p.patientId = e.entityId
+        JOIN
+            [tmtdata_prod].[dbo].[CLINIC] c ON c.clinicId = e.clinicId
+    """
+
+    final_query, params = db_handler._construct_sql_statement(
+        base_query,
+        filters=filters,
+        order_by="e.currentStateDate",
+        order_direction="DESC"
+    )
+
+    logger.info(f"\n\nprinting sql:\n\n{final_query}\n\n")
+
+    return db_handler._execute_query(final_query, tuple(params))

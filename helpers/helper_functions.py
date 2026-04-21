@@ -81,46 +81,6 @@ def get_age_category(cpr: str, on_date: date | None = None) -> str:
     return "is_under_21y9m"
 
 
-# pylint: disable=protected-access
-def find_events(db_handler: SolteqTandDatabase, filters=None):
-    """
-    Helper to find events for a specific event_name
-    """
-
-    base_query = """
-        SELECT
-            e.[eventId],
-            e.[type],
-            e.[currentStateText],
-            e.[currentStateDate],
-            e.[timestamp],
-            e.[clinicId],
-            c.name,
-            e.[entityId],
-            e.[eventTriggerDate],
-            p.cpr,
-            CONCAT(p.firstName, ' ', p.lastName) as fullName,
-            e.archived
-        FROM
-            [tmtdata_prod].[dbo].[EVENT] e
-        JOIN
-            [tmtdata_prod].[dbo].[PATIENT] p ON p.patientId = e.entityId
-        JOIN
-            [tmtdata_prod].[dbo].[CLINIC] c ON c.clinicId = e.clinicId
-    """
-
-    final_query, params = db_handler._construct_sql_statement(
-        base_query,
-        filters=filters,
-        order_by="e.currentStateDate",
-        order_direction="DESC"
-    )
-
-    logger.info(f"\n\nprinting sql:\n\n{final_query}\n\n")
-
-    return db_handler._execute_query(final_query, tuple(params))
-
-
 def handle_dashboard_run_creation(process_name: str, meta: dict):
     """
     Method for handling the creation of new process dashboard runs - if run already exists for the citizen, no new process run is created
