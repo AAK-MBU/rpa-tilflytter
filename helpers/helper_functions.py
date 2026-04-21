@@ -13,8 +13,6 @@ from mbu_process_dashboard_shared_components import (
     process_step_run,
 )
 
-from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
-
 load_dotenv()
 
 logger = logging.getLogger(__name__)
