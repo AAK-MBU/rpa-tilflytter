@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "automation-server-client @ git+https://github.com/odense-rpa/automation-server-client.git",
+    "docx2pdf",
     "itk_dev_shared_components",
     "mbu-dev-shared-components>=3.0.0",
     "mbu_msoffice_integration>=1.0.1",
