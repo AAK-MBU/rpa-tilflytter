@@ -46,12 +46,12 @@ def process_item(item_data: dict, item_reference: str):
         solteq_app.open_patient(ssn=citizen_cpr)
 
         if "--formular_ikke_indsendt_inden_for_tidsfristen" in sys.argv:
-            solteq_helper.check_and_create_new_event(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, event_text="Formular ikke indsendt inden for tidsfristen", cpr=citizen_cpr)
+            solteq_helper.check_and_create_new_event(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, event_name="Formular ikke indsendt inden for tidsfristen", cpr=citizen_cpr)
 
             helper_functions.handle_process_dashboard(status="cancelled", item_reference=item_reference, process_step_name="Formular indsendt inden for tidsfristen")
 
         elif "--tilflytter_overskredet_aldersgraense" in sys.argv:
-            solteq_helper.check_and_create_new_event(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, event_text="Tilflytter 21 år og 9 måneder - Formular ikke udfyldt", cpr=citizen_cpr)
+            solteq_helper.check_and_create_new_event(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, event_name="Tilflytter 21 år og 9 måneder - Formular ikke udfyldt", cpr=citizen_cpr)
 
             helper_functions.handle_process_dashboard(status="cancelled", item_reference=item_reference, process_step_name="Tilflytter under 21 år og 9 måneder")
 
@@ -88,7 +88,7 @@ def process_item(item_data: dict, item_reference: str):
                 logger.info("Step 5 - Handling tilflytter age step in process dashboard")
                 if age_category == "is_21y9m_or_older":
                     logger.info("Citizen in 21y9m_or_older age category --> creating event in Solteq")
-                    solteq_helper.check_and_create_new_event(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, event_text="Tilflytter 21 år og 9 måneder ved tilflytning", cpr=citizen_cpr)
+                    solteq_helper.check_and_create_new_event(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, event_name="Tilflytter 21 år og 9 måneder ved tilflytning", cpr=citizen_cpr)
 
                     helper_functions.handle_process_dashboard(status="cancelled", item_reference=item_reference, process_step_name="Tilflytter under 21 år og 9 måneder", failure=None, process_name=process_name)
 
@@ -99,7 +99,7 @@ def process_item(item_data: dict, item_reference: str):
                 logger.info("Citizen and parents are not registered for Digital Post")
                 helper_functions.handle_process_dashboard(status="cancelled", item_reference=item_reference, process_step_name="Digital post udsendt", failure="Tilflytter - Ikke tilmeldt Digital Post", process_name=process_name)
 
-                solteq_helper.check_and_create_new_event(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, event_text="Tilflytter - Ikke tilmeldt Digital Post", cpr=citizen_cpr)
+                solteq_helper.check_and_create_new_event(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, event_name="Tilflytter - Ikke tilmeldt Digital Post", cpr=citizen_cpr)
 
         logger.info("Closing patient window")
         solteq_app.close_patient_window()

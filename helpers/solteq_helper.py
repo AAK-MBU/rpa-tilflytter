@@ -39,8 +39,6 @@ def check_digital_post_status(cpr: str, solteq_tand_db_object: SolteqTandDatabas
         filters=filters,
     )
 
-    logger.info(f"\n\nprinting sql:\n\n{final_query}\n\n")
-
     rows = solteq_tand_db_object._execute_query(final_query, tuple(params))
 
     if rows:
@@ -56,8 +54,7 @@ def check_and_create_welcome_document(item_data: dict, solteq_app: SolteqTandApp
     """
 
     if age_category == "under_18":
-        template_name = "Tilflytter 21 år 9 mdr - Velkommen"
-        # template_name = "Velkomstbrev til forældre og patient under 18"
+        template_name = "Velkomstbrev til forældre og patient under 18"
 
         welcome_document_filename = "Velkomstbrev"
 
@@ -67,8 +64,7 @@ def check_and_create_welcome_document(item_data: dict, solteq_app: SolteqTandApp
         welcome_document_filename = "Velkomstbrev"
 
     else:
-        template_name = "Tilflytter 21 år 9 mdr - Velkommen"
-        # template_name = "Velkomstbrev til ung fra 18-21 år og 8 måneder"
+        template_name = "Velkomstbrev til ung fra 18-21 år og 8 måneder"
 
         welcome_document_filename = "Velkomstbrev"
 
@@ -92,8 +88,6 @@ def check_and_create_welcome_document(item_data: dict, solteq_app: SolteqTandApp
         folder_path = f"C:\\tmp\\tmt\\{item_data['cpr']}"
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
-
-        print(f"\nprinting the folder_path: {folder_path}\n")
 
         logger.info("No existing welcome documents found, creating a new one.")
         document_template_metadata = {
@@ -191,16 +185,16 @@ def check_and_handle_event(solteq_app: SolteqTandApp, cpr: str, solteq_tand_db_o
         logger.info("Event already processed, skipping processing.")
 
 
-def check_and_create_new_event(solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, event_text: str, cpr: str):
+def check_and_create_new_event(solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, event_name: str, cpr: str):
     """
-    Check if and event exists in Solteq Tand, and create it if not
+    Check if an event exists in Solteq Tand, and create it if not
     """
 
     logger.info("Checking if event is already processed.")
 
     filters = {
         "e.currentStateText": [
-            f"{event_text}",
+            f"{event_name}",
         ],
         "p.cpr": cpr
     }
@@ -208,7 +202,7 @@ def check_and_create_new_event(solteq_app: SolteqTandApp, solteq_tand_db_object:
     events = find_events(db_handler=solteq_tand_db_object, filters=filters)
 
     if not events:
-        solteq_app.create_new_event(clinic_name="Tandplejen Aarhus", event_text=event_text)
+        solteq_app.create_new_event(clinic_name="Tandplejen Aarhus", event_text=event_name)
 
         logger.info("Event was created successfully.")
 
@@ -250,7 +244,5 @@ def find_events(db_handler: SolteqTandDatabase, filters=None):
         order_by="e.currentStateDate",
         order_direction="DESC"
     )
-
-    logger.info(f"\n\nprinting sql:\n\n{final_query}\n\n")
 
     return db_handler._execute_query(final_query, tuple(params))
