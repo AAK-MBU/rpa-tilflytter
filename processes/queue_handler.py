@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime, timedelta
 
 from automation_server_client import Workqueue
 from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
@@ -11,8 +12,6 @@ from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatab
 from helpers import config, pre_process_checks, solteq_helper
 
 SOLTEQ_TAND_DB_CONN_STRING = os.getenv("DBCONNECTIONSTRINGSOLTEQTAND")
-
-print(SOLTEQ_TAND_DB_CONN_STRING)
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +43,8 @@ def retrieve_items_for_queue() -> list[dict]:
 
     print()
 
+    cutoff_date = datetime.now() - timedelta(days=14)
+
     for ev in events:
         print(ev)
 
@@ -52,6 +53,15 @@ def retrieve_items_for_queue() -> list[dict]:
         citizen_cpr = ev.get("cpr")
 
         event_created_date = ev.get("currentStateDate")
+
+        # Skip events created less than 14 days ago
+        if event_created_date > cutoff_date:
+            logger.info(
+                "Event for CPR %s is only %.1f days old, skipping (needs 14+ days)",
+                citizen_cpr,
+                (datetime.now() - event_created_date).days,
+            )
+            continue
 
         citizen_dict = {
             "cpr": citizen_cpr,

@@ -51,22 +51,36 @@ def check_and_create_welcome_document(item_data: dict, solteq_app: SolteqTandApp
     """
     Create a welcome document based on the patient's age.
     If the document already exists, it will not be created again.
+
+    Age categories:
+    - "0_to_14": Velkomstbrev til forældre til patient 0-14 år
+    - "15_to_17": Velkomstbrev til forældre og patient 15-18 år
+    - "18_to_21y8m": Velkomstbrev til ung fra 18-21 år og 8 måneder
+    - "21y9m_and_older": Tilflytter 21 år 9 mdr - Velkommen
     """
 
-    if age_category == "under_18":
-        template_name = "Velkomstbrev til forældre og patient under 18"
+    if age_category == "0_to_14":
+        template_name = "Velkomstbrev til forældre til patient 0-14 år"
 
         welcome_document_filename = "Velkomstbrev"
 
-    elif age_category == "is_21y9m_or_older":
+    elif age_category == "15_to_17":
+        template_name = "Velkomstbrev til forældre og patient 15-18 år"
+
+        welcome_document_filename = "Velkomstbrev"
+
+    elif age_category == "18_to_21y8m":
+        template_name = "Velkomstbrev til ung fra 18-21 år og 8 måneder"
+
+        welcome_document_filename = "Velkomstbrev"
+
+    elif age_category == "21y9m_and_older":
         template_name = "Tilflytter 21 år 9 mdr - Velkommen"
 
         welcome_document_filename = "Velkomstbrev"
 
     else:
-        template_name = "Velkomstbrev til ung fra 18-21 år og 8 måneder"
-
-        welcome_document_filename = "Velkomstbrev"
+        raise ValueError(f"Unknown age category: {age_category}")
 
     one_month_ago = datetime.datetime.now() - relativedelta(months=1)
 

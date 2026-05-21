@@ -8,8 +8,8 @@ import requests
 from automation_server_client import AutomationServer, WorkItem, Workqueue
 from dotenv import load_dotenv
 
-ATS_TOKEN = os.getenv("ATS_TOKEN")
-ATS_URL = os.getenv("ATS_URL")
+ATS_TOKEN = os.getenv("ATS_TOKEN_DEV")
+ATS_URL = os.getenv("ATS_URL_DEV")
 
 
 def get_workqueue_items(workqueue: Workqueue, return_data=False):
@@ -19,13 +19,10 @@ def get_workqueue_items(workqueue: Workqueue, return_data=False):
     """
     load_dotenv()
 
-    url = os.getenv("ATS_URL")
-    token = os.getenv("ATS_TOKEN")
-
-    if not url or not token:
+    if not ATS_URL or not ATS_TOKEN:
         raise OSError("ATS_URL or ATS_TOKEN is not set in the environment")
 
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"Authorization": f"Bearer {ATS_TOKEN}"}
 
     workqueue_items = {} if return_data else set()
 
@@ -33,7 +30,7 @@ def get_workqueue_items(workqueue: Workqueue, return_data=False):
     size = 200  # max allowed
 
     while True:
-        full_url = f"{url}/workqueues/{workqueue.id}/items?page={page}&size={size}"
+        full_url = f"{ATS_URL}/workqueues/{workqueue.id}/items?page={page}&size={size}"
         response = requests.get(full_url, headers=headers, timeout=60)
         response.raise_for_status()
 
@@ -76,7 +73,7 @@ def fetch_workqueue(workqueue_name: str):
 
     headers = {"Authorization": f"Bearer {ATS_TOKEN}"}
 
-    full_url = f"{ATS_URL}/workqueues/by_name/tan.udskrivning22.{workqueue_name}"
+    full_url = f"{ATS_URL}/workqueues/by_name/{workqueue_name}"
 
     response_json = requests.get(full_url, headers=headers, timeout=60).json()
     workqueue_id = response_json.get("id")

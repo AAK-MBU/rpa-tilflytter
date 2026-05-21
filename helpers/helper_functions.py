@@ -19,13 +19,22 @@ logger = logging.getLogger(__name__)
 
 API_ADMIN_TOKEN = os.getenv("API_ADMIN_TOKEN")
 
-### REMOVE BASE URL ###
-CLIENT = ProcessDashboardClient(api_admin_token=API_ADMIN_TOKEN, base_url="https://dev-mbu-dashboard-api.adm.aarhuskommune.dk/api/v1")
+DASHBOARD_BASE_URL = os.getenv("DASHBOARD_BASE_URL", "https://dev-mbu-dashboard-api.adm.aarhuskommune.dk/api/v1")
+CLIENT = ProcessDashboardClient(api_admin_token=API_ADMIN_TOKEN, base_url=DASHBOARD_BASE_URL)
+
+os.environ["ATS_TOKEN"] = os.getenv("ATS_TOKEN_DEV")
+os.environ["ATS_URL"] = os.getenv("ATS_URL_DEV")
 
 
 def get_age_category(cpr: str, on_date: date | None = None) -> str:
     """
-    Helper to find a citizen's age category from their CPR
+    Helper to find a citizen's age category from their CPR.
+
+    Categories:
+    - "0_to_14": 0-14 years (to parents only)
+    - "15_to_17": 15-17 years (to parents and patient)
+    - "18_to_21y8m": 18 to before 21 years 9 months (to young adult)
+    - "21y9m_and_older": 21 years 9 months and older
     """
 
     s = cpr.replace("-", "").strip()
@@ -55,15 +64,21 @@ def get_age_category(cpr: str, on_date: date | None = None) -> str:
 
     today = on_date or date.today()
 
+    # Calculate age (years only)
     age_years = today.year - birthdate.year
 
     if (today.month, today.day) < (birthdate.month, birthdate.day):
         age_years -= 1
 
-    if age_years < 18:
-        return "under_18"
+    # Category 1: 0-14 years
+    if age_years < 15:
+        return "0_to_14"
 
-    # compute 21y9m cutoff
+    # Category 2: 15-17 years
+    if age_years < 18:
+        return "15_to_17"
+
+    # Category 3 & 4: Calculate 21 years 9 months cutoff
     cutoff_year = today.year - 21
     cutoff_month = today.month - 9
 
@@ -73,10 +88,12 @@ def get_age_category(cpr: str, on_date: date | None = None) -> str:
 
     cutoff_date = date(cutoff_year, cutoff_month, today.day)
 
+    # Category 4: 21 years 9 months and older
     if birthdate <= cutoff_date:
-        return "is_21y9m_or_older"
+        return "21y9m_and_older"
 
-    return "is_under_21y9m"
+    # Category 3: 18 to before 21 years 9 months
+    return "18_to_21y8m"
 
 
 def handle_dashboard_run_creation(process_name: str, meta: dict):

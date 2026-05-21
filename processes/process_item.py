@@ -6,12 +6,12 @@ import sys
 import os
 import logging
 
-from mbu_rpa_core.exceptions import BusinessError
+from datetime import datetime, timedelta
 
+from mbu_rpa_core.exceptions import BusinessError
 from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
 from helpers import helper_functions, solteq_helper
-
 from processes.application_handler import get_app
 
 logger = logging.getLogger(__name__)
@@ -62,6 +62,24 @@ def process_item(item_data: dict, item_reference: str):
 
             helper_functions.handle_process_dashboard(status="success", item_reference=item_reference, process_step_name="Tilflytter registreret", failure=None, process_name=process_name)
 
+            # STEP 1b - create booking reminder 4 weeks ahead
+            logger.info("Step 1b - Creating booking reminder 4 weeks ahead")
+            future_date = datetime.now() + timedelta(weeks=4)
+            booking_reminder_data = {
+                "comboBoxBookingType": "Administration",
+                "comboBoxDentist": "Hend El-Mohammad",
+                "comboBoxChair": "Administrativ",
+                "dateTimePickerStartTime": "07:45",
+                "textBoxDuration": "5",
+                "comboBoxStatus": "Behovsaftale",
+                "textBoxBookingText": "Tilflytter - Er digital formular udfyldt?",
+                "futureDate": future_date.strftime("%d-%m-%Y"),
+                "futureDateTime": future_date.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+            }
+
+            solteq_app.create_booking_reminder(booking_reminder_data=booking_reminder_data, booking_clinic="Tandplejen Aarhus - Kontaktcenter")
+            logger.info("Booking reminder created successfully")
+
             # STEP 2 - afvikl tilflytter hændelse i Solteq Tand
             logger.info("Step 2 - Handling tilflytter event in Solteq")
             solteq_helper.check_and_handle_event(solteq_app=solteq_app, cpr=citizen_cpr, solteq_tand_db_object=solteq_tand_db_object, event_name=event_name)
@@ -82,12 +100,15 @@ def process_item(item_data: dict, item_reference: str):
                 logger.info("Handling the sending of the welcome document")
                 solteq_helper.check_and_send_welcome_document(item_data=item_data, solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, welcome_document_filename=document_file_name)
 
+                logger.info("Creating administrative note for welcome letter")
+                solteq_app.create_journal_note(note_message="Velkomstbrev er sendt. Se Dokumenter", checkmark_in_complete=False)
+
                 helper_functions.handle_process_dashboard(status="success", item_reference=item_reference, process_step_name="Digital post udsendt", failure=None, process_name=process_name)
 
                 # STEP 5 - hvis borger er 21 år og 9 måneder eller ældre --> annullér deres process run
                 logger.info("Step 5 - Handling tilflytter age step in process dashboard")
-                if age_category == "is_21y9m_or_older":
-                    logger.info("Citizen in 21y9m_or_older age category --> creating event in Solteq")
+                if age_category == "21y9m_and_older":
+                    logger.info("Citizen in 21y9m_and_older age category --> creating event in Solteq")
                     solteq_helper.check_and_create_new_event(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, event_name="Tilflytter 21 år og 9 måneder ved tilflytning", cpr=citizen_cpr)
 
                     helper_functions.handle_process_dashboard(status="cancelled", item_reference=item_reference, process_step_name="Tilflytter under 21 år og 9 måneder", failure=None, process_name=process_name)
