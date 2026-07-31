@@ -2,14 +2,16 @@
 
 import os
 
+import logging
+
 from datetime import datetime
 
+from dateutil.relativedelta import relativedelta
 from mbu_process_dashboard_shared_components.process_dashboard_client import ProcessDashboardClient
 from mbu_process_dashboard_shared_components import (
     process,
     process_run,
 )
-from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
 from helpers import ats_functions, helper_functions
 
@@ -24,12 +26,18 @@ def main():
 
     API_ADMIN_TOKEN = os.getenv("API_ADMIN_TOKEN")
     DASHBOARD_BASE_URL = os.getenv("DASHBOARD_BASE_URL", "https://dev-mbu-dashboard-api.adm.aarhuskommune.dk/api/v1")
-    DB_CONN_STRING = os.getenv("DBCONNECTIONSTRINGSOLTEQTAND")
 
     client = ProcessDashboardClient(api_admin_token=API_ADMIN_TOKEN, base_url=DASHBOARD_BASE_URL)
-    db_handler = SolteqTandDatabase(conn_str=DB_CONN_STRING)
 
-    process_id, _ = process.find_process_id_and_steps(client=client, process_name=process_name)
+    process_id, process_steps = process.find_process_id_and_steps(client=client, process_name=process_name)
+
+    # Resolve the "form submitted in time" step so we can check actual submission, rather
+    # than assuming a still-running run means the citizen never submitted.
+    formular_step_name = "Formular indsendt inden for tidsfristen"
+    formular_step_id = next((step.get("id") for step in process_steps if step.get("name") == formular_step_name), None)
+
+    if formular_step_id is None:
+        logging.warning("Could not resolve step id for '%s' - formular deadline check may over-flag", formular_step_name)
 
     all_process_runs = process_run.get_all_process_runs(client=client, process_id=process_id, run_status="running")
 
@@ -43,27 +51,34 @@ def main():
             "cpr": cpr
         }
 
-        print("checking booking reminder date")
-        # Check if booking reminder date has been reached
-        booking_reminder_date = get_tilflytter_booking_reminder_date(cpr=cpr, db_handler=db_handler)
+        # The 3-month deadline runs from when the welcome letter was actually sent
+        # (recorded in the run meta), not from when the process run started.
+        sent_ts = run["meta"].get("welcome_document_sent_timestamp")
 
-        if booking_reminder_date:
-            # Convert to date object if it's a datetime
-            if isinstance(booking_reminder_date, datetime):
-                booking_reminder_date = booking_reminder_date.date()
+        if sent_ts:
+            deadline = (datetime.fromisoformat(sent_ts) + relativedelta(months=3)).date()
 
-                print(f"booking reminder date: {booking_reminder_date}")
+            print(f"welcome document sent: {sent_ts}, deadline: {deadline}")
 
-            if today >= booking_reminder_date:
+            # A still-running run does NOT mean the citizen failed to submit - only flag
+            # them if the submission step has not been marked success.
+            formular_submitted = any(
+                step.get("step_id") == formular_step_id and step.get("status") == "success"
+                for step in run.get("steps", [])
+            )
+
+            if today >= deadline and not formular_submitted:
+                # 3 months since the letter was sent and no submission in time
                 formular_not_sent.append(item_data)
             else:
-                age_category = helper_functions.get_age_category(cpr=cpr)
+                age_category, _ = helper_functions.get_age_category(cpr=cpr)
 
                 if age_category == "21y9m_and_older":
                     tilflytter_above_age_limit.append(item_data)
 
         else:
-            age_category = helper_functions.get_age_category(cpr=cpr)
+            # Welcome letter not sent yet (e.g. under-18 awaiting approval) - no clock started
+            age_category, _ = helper_functions.get_age_category(cpr=cpr)
 
             if age_category == "21y9m_and_older":
                 tilflytter_above_age_limit.append(item_data)
@@ -81,37 +96,3 @@ def main():
         workqueue = ats_functions.fetch_workqueue(workqueue_name=workqueue_name)
 
         ats_functions.enqueue_items(workqueue=workqueue, items=tilflytter_above_age_limit)
-
-
-def get_tilflytter_booking_reminder_date(cpr: str, db_handler: SolteqTandDatabase):
-    """
-    Query the database for the tilflytter booking reminder scheduled date.
-    Returns the booking appointment date if found, None otherwise.
-    """
-    query = """
-        SELECT TOP 1
-            b.BookingID,
-            b.CreatedDateTime,
-            b.MeetingTime,
-            b.Status
-        FROM
-            [tmtdata_prod].[dbo].[BOOKING] b
-        JOIN
-            [tmtdata_prod].[dbo].[PATIENT] p ON p.patientId = b.patientId
-        WHERE
-            p.cpr = ?
-            AND b.BookingText LIKE '%Tilflytter - Er digital formular udfyldt?%'
-        ORDER BY
-            b.CreatedDateTime DESC
-    """
-
-    # pylint: disable=protected-access
-    rows = db_handler._execute_query(query, params=(cpr,))
-
-    if rows:
-        # Use MeetingTime (scheduled appointment date) rather than CreatedDateTime
-        booking_date = rows[0].get("MeetingTime")
-        if booking_date:
-            return booking_date
-
-    return None
