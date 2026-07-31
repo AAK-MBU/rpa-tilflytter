@@ -3,3 +3,8 @@
 2026-02-20 11:37:14.011 base_ui.py[112] close_window -> Find Control Timeout(10s): {Name: 'Ja', ControlType: ButtonControl}
 2026-04-09 13:13:23.546 event.py[159] process_tilflytter_event -> Find Control Timeout(10s): {Name: 'Nej', ControlType: ButtonControl}
 2026-04-09 13:39:50.390 event.py[159] process_tilflytter_event -> Find Control Timeout(10s): {Name: 'Nej', ControlType: ButtonControl}
+2026-07-07 11:59:01.650 base_ui.py[111] close_window -> Find Control Timeout(10s): {Name: 'TMT - Afslut', ControlType: WindowControl}
+2026-07-07 13:04:07.379 document.py[247] create_document_from_template -> Can not move cursor. ListItemControl's BoundingRectangle is (0,0,0,0)[0x0]. SearchProperties: {ControlType: ListItemControl}
+2026-07-07 13:04:37.441 base_ui.py[111] close_window -> Find Control Timeout(10s): {Name: 'Tand - Afslut', ControlType: WindowControl}
+2026-07-07 13:07:54.419 document.py[247] create_document_from_template -> Can not move cursor. ListItemControl's BoundingRectangle is (0,0,0,0)[0x0]. SearchProperties: {ControlType: ListItemControl}
+2026-07-07 13:08:21.202 base_ui.py[111] close_window -> Find Control Timeout(10s): {Name: 'Tand - Afslut', ControlType: WindowControl}

@@ -2,10 +2,12 @@
 
 import logging
 import os
+import time
 
 import datetime
 
 from dateutil.relativedelta import relativedelta
+from mbu_rpa_core.exceptions import BusinessError
 from mbu_solteqtand_shared_components.application import SolteqTandApp
 from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
@@ -53,48 +55,36 @@ def check_and_create_welcome_document(item_data: dict, solteq_app: SolteqTandApp
     If the document already exists, it will not be created again.
 
     Age categories:
-    - "0_to_14": Velkomstbrev til forældre til patient 0-14 år
-    - "15_to_17": Velkomstbrev til forældre og patient 15-18 år
-    - "18_to_21y8m": Velkomstbrev til ung fra 18-21 år og 8 måneder
-    - "21y9m_and_older": Tilflytter 21 år 9 mdr - Velkommen
+    - "0_to_5": Tilflytter 0-5 år - Velkommen (parents only)
+    - "6_to_14": Tilflytter 6-14 år - Velkommen (parents only)
+    - "15_to_17": Tilflytter 15-17 år - Velkommen (parents and patient)
+    - "18_to_21y8m": Tilflytter 18-21 år 8 mdr - Velkommen (young adult)
+    - "21y9m_and_older": Tilflytter 21 år 9 mdr - Velkommen (adult)
     """
 
-    if age_category == "0_to_14":
-        template_name = "Velkomstbrev til forældre til patient 0-14 år"
+    if age_category == "0_to_5":
+        template_name = "Tilflytter 0-5 år - Velkommen"
 
-        welcome_document_filename = "Velkomstbrev"
+    elif age_category == "6_to_14":
+        template_name = "Tilflytter 6-14 år - Velkommen"
 
     elif age_category == "15_to_17":
-        template_name = "Velkomstbrev til forældre og patient 15-18 år"
-
-        welcome_document_filename = "Velkomstbrev"
+        template_name = "Tilflytter 15-17 år - Velkommen"
 
     elif age_category == "18_to_21y8m":
-        template_name = "Velkomstbrev til ung fra 18-21 år og 8 måneder"
-
-        welcome_document_filename = "Velkomstbrev"
+        template_name = "Tilflytter 18-21 år 8 mdr - Velkommen"
 
     elif age_category == "21y9m_and_older":
         template_name = "Tilflytter 21 år 9 mdr - Velkommen"
 
-        welcome_document_filename = "Velkomstbrev"
-
     else:
         raise ValueError(f"Unknown age category: {age_category}")
 
-    one_month_ago = datetime.datetime.now() - relativedelta(months=1)
+    welcome_document_filename = "Velkomstbrev"
 
     logger.info("Checking for existing welcome documents.")
 
-    list_of_documents = solteq_tand_db_object.get_list_of_documents(
-        filters={
-            "p.cpr": item_data["cpr"],
-            "ds.OriginalFilename": f"%{welcome_document_filename}%",
-            "ds.rn": "1",
-            "ds.DocumentStoreStatusId": "1",
-            "ds.DocumentCreatedDate": (">=", one_month_ago),
-        }
-    )
+    list_of_documents = get_welcome_documents(solteq_tand_db_object, item_data["cpr"], welcome_document_filename)
 
     logger.info(f"Found {len(list_of_documents)} existing welcome documents.")
 
@@ -114,6 +104,11 @@ def check_and_create_welcome_document(item_data: dict, solteq_app: SolteqTandApp
             metadata=document_template_metadata
         )
 
+        time.sleep(3)  # Wait for the document to be registered in the database
+
+        if not welcome_document_exists(solteq_tand_db_object, item_data["cpr"], welcome_document_filename):
+            raise RuntimeError("Welcome document creation failed.")
+
         logger.info("Welcome document was created successfully.")
 
     else:
@@ -129,20 +124,10 @@ def check_and_send_welcome_document(item_data: dict, solteq_app: SolteqTandApp, 
     and sends it to DigitalPost if it has not been sent yet.
     """
 
-    one_month_ago = datetime.datetime.now() - relativedelta(months=1)
-
     # Check if the discharge document is already sent to DigitalPost; if not, send it.
     logger.info("Checking if the welcome document is already sent to DigitalPost.")
 
-    list_of_documents = solteq_tand_db_object.get_list_of_documents(
-        filters={
-            "p.cpr": item_data["cpr"],
-            "ds.OriginalFilename": f"%{welcome_document_filename}%",
-            "ds.rn": "1",
-            "ds.DocumentStoreStatusId": "1",
-            "ds.DocumentCreatedDate": (">=", one_month_ago),
-        }
-    )
+    list_of_documents = get_welcome_documents(solteq_tand_db_object, item_data["cpr"], welcome_document_filename)
 
     if (
         list_of_documents
@@ -159,10 +144,40 @@ def check_and_send_welcome_document(item_data: dict, solteq_app: SolteqTandApp, 
             metadata=discharge_document_metadata
         )
 
+        time.sleep(3)  # Wait for the send status to be registered in the database
+
+        list_of_documents = get_welcome_documents(solteq_tand_db_object, item_data["cpr"], welcome_document_filename)
+
+        if not (list_of_documents and list_of_documents[0]["SentToNemSMS"]):
+            raise RuntimeError("Sending welcome document to DigitalPost failed.")
+
         logger.info("Welcome document sent to DigitalPost successfully.")
 
     else:
         logger.info("Welcome document already sent to DigitalPost or not found, skipping sending.")
+
+
+def get_welcome_documents(solteq_tand_db_object: SolteqTandDatabase, cpr: str, welcome_document_filename: str = "Velkomstbrev"):
+    """
+    Return the welcome documents journalised for the citizen within the last month.
+
+    The tilflytter-specific bits (the "Velkomstbrev" name and the one-month window)
+    live here; the generic document lookup lives in SolteqTandDatabase.get_documents.
+    """
+
+    one_month_ago = datetime.datetime.now() - relativedelta(months=1)
+
+    return solteq_tand_db_object.get_documents(cpr, welcome_document_filename, created_after=one_month_ago)
+
+
+def welcome_document_exists(solteq_tand_db_object: SolteqTandDatabase, cpr: str, welcome_document_filename: str = "Velkomstbrev") -> bool:
+    """
+    Return True if a welcome document has been journalised for the citizen within
+    the last month. Used to confirm a manual send (by Tandplejen) before marking
+    the booking as sent, since manual sends are not registered via Digital Post.
+    """
+
+    return bool(get_welcome_documents(solteq_tand_db_object, cpr, welcome_document_filename))
 
 
 def check_and_handle_event(solteq_app: SolteqTandApp, cpr: str, solteq_tand_db_object: SolteqTandDatabase, event_name):
@@ -172,15 +187,21 @@ def check_and_handle_event(solteq_app: SolteqTandApp, cpr: str, solteq_tand_db_o
 
     logger.info("Checking if event is already processed.")
 
+    # Processing an event flips e.archived from 0 to 1, so archived events
+    # with this state text mean the event has already been processed.
     filters = {
         "e.currentStateText": [
             f"{event_name}",
         ],
         "p.cpr": cpr,
-        "e.archived": 0,
+        "e.archived": 1,
     }
 
-    events = find_events(db_handler=solteq_tand_db_object, filters=filters)
+    events = solteq_tand_db_object.get_list_of_events(
+        filters=filters,
+        order_by="e.currentStateDate",
+        order_direction="DESC",
+    )
 
     print()
 
@@ -189,9 +210,26 @@ def check_and_handle_event(solteq_app: SolteqTandApp, cpr: str, solteq_tand_db_o
     logger.info(f"Found {len(events)} existing processed tilflytter events.")
 
     if not events:
+        # Ensure the citizen actually has the unprocessed event before handling it
+        unprocessed_filters = {
+            "e.currentStateText": [
+                f"{event_name}",
+            ],
+            "p.cpr": cpr,
+            "e.archived": 0,
+        }
+
+        if not solteq_tand_db_object.get_list_of_events(filters=unprocessed_filters):
+            raise BusinessError(f"Event '{event_name}' not found on citizen.")
+
         target_values = {event_name, "Henvisning", "Nej"}
 
         solteq_app.process_target_event(target_values=target_values)
+
+        time.sleep(3)  # Wait for the event state to be registered in the database
+
+        if not solteq_tand_db_object.get_list_of_events(filters=filters):
+            raise RuntimeError("Event processing failed.")
 
         logger.info("Event was processed successfully.")
 
@@ -213,10 +251,19 @@ def check_and_create_new_event(solteq_app: SolteqTandApp, solteq_tand_db_object:
         "p.cpr": cpr
     }
 
-    events = find_events(db_handler=solteq_tand_db_object, filters=filters)
+    events = solteq_tand_db_object.get_list_of_events(
+        filters=filters,
+        order_by="e.currentStateDate",
+        order_direction="DESC",
+    )
 
     if not events:
-        solteq_app.create_new_event(clinic_name="Tandplejen Aarhus", event_text=event_name)
+        solteq_app.create_new_event(clinic_name="Tandplejen Aarhus - Kontaktcenter", event_text=event_name)
+
+        time.sleep(3)  # Wait for the event to be registered in the database
+
+        if not solteq_tand_db_object.get_list_of_events(filters=filters):
+            raise RuntimeError("Event creation failed.")
 
         logger.info("Event was created successfully.")
 
@@ -224,39 +271,170 @@ def check_and_create_new_event(solteq_app: SolteqTandApp, solteq_tand_db_object:
         logger.info("Event already exists.")
 
 
-# pylint: disable=protected-access
-def find_events(db_handler: SolteqTandDatabase, filters=None):
+def is_event_processed(solteq_tand_db_object: SolteqTandDatabase, cpr: str, event_name: str) -> bool:
     """
-    Helper to find events for a specific event_name
+    Return True if the given event has been processed (archived) for the citizen,
+    False if it exists but is not yet processed.
+
+    Raises BusinessError if the event does not exist at all: the caller creates the
+    event before checking, so a missing event is an anomaly to flag rather than a
+    legitimate "not yet processed" state to silently wait on. Processing/approving
+    an event in Solteq Tand flips e.archived from 0 to 1.
     """
 
-    base_query = """
-        SELECT
-            e.[eventId],
-            e.[type],
-            e.[currentStateText],
-            e.[currentStateDate],
-            e.[timestamp],
-            e.[clinicId],
-            c.name,
-            e.[entityId],
-            e.[eventTriggerDate],
-            p.cpr,
-            CONCAT(p.firstName, ' ', p.lastName) as fullName,
-            e.archived
-        FROM
-            [tmtdata_prod].[dbo].[EVENT] e
-        JOIN
-            [tmtdata_prod].[dbo].[PATIENT] p ON p.patientId = e.entityId
-        JOIN
-            [tmtdata_prod].[dbo].[CLINIC] c ON c.clinicId = e.clinicId
+    filters = {
+        "e.currentStateText": [
+            f"{event_name}",
+        ],
+        "p.cpr": cpr,
+    }
+
+    events = solteq_tand_db_object.get_list_of_events(filters=filters)
+
+    if not events:
+        raise BusinessError(f"Event '{event_name}' not found on citizen.")
+
+    return any(event["archived"] for event in events)
+
+
+def check_and_create_booking_reminder(solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, cpr: str, booking_status: str, booking_text: str = "Velkomstbrev"):
+    """
+    Check if the tilflytter booking reminder exists in Solteq Tand, and create it if not.
+    booking_status depends on the citizen's age category (see get_age_category).
     """
 
-    final_query, params = db_handler._construct_sql_statement(
-        base_query,
-        filters=filters,
-        order_by="e.currentStateDate",
-        order_direction="DESC"
+    logger.info("Checking if booking reminder already exists.")
+
+    # Only look at future bookings, so old reminders from a previous
+    # tilflytter run do not count as existing
+    filters = {
+        "p.cpr": cpr,
+        "bt.Description": "Z - Tilflytter",
+        "b.BookingText": booking_text,
+        "b.StartTime": (">=", datetime.datetime.now()),
+    }
+
+    bookings = solteq_tand_db_object.get_list_of_bookings(filters=filters)
+
+    if not bookings:
+        future_date = datetime.datetime.now() + relativedelta(months=3)
+
+        booking_reminder_data = {
+            "comboBoxBookingType": "Z - Tilflytter",
+            "comboBoxDentist": "Z - Tilflytter",
+            "comboBoxChair": "Z - Tilflytter",
+            "dateTimePickerStartTime": "07:45",
+            "textBoxDuration": "5",
+            "comboBoxStatus": booking_status,
+            "textBoxBookingText": booking_text,
+            "futureDate": future_date.strftime("%d-%m-%Y"),
+            "futureDateTime": future_date.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+        }
+
+        solteq_app.create_booking_reminder(booking_reminder_data=booking_reminder_data, booking_clinic="Tandplejen Aarhus - Kontaktcenter")
+
+        time.sleep(3)  # Wait for the booking to be registered in the database
+
+        if not solteq_tand_db_object.get_list_of_bookings(filters=filters):
+            raise RuntimeError("Booking reminder creation failed.")
+
+        logger.info("Booking reminder was created successfully.")
+
+    else:
+        logger.info("Booking reminder already exists, skipping creation.")
+
+
+def check_and_set_booking_status(solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, cpr: str, status_id: int, status_text: str, booking_text: str = "Velkomstbrev"):
+    """
+    Set the tilflytter booking's aftalestatus, unless it already has it.
+
+    b.Status is a numeric status id in the database, while the UI status dropdown
+    is selected by its text, so both forms are needed:
+    - status_id: the numeric status used for the DB check/verify (e.g. 640).
+    - status_text: the dropdown label used to set the status in the UI
+      (e.g. "Tilflytter - Velkomstbrev udsendt").
+
+    Idempotent: safe to call on re-runs where the document was already dispatched
+    but a previous status update did not complete.
+    """
+
+    logger.info("Checking current tilflytter booking status.")
+
+    # b.Status is not in the SELECT of get_list_of_bookings, but it can still be
+    # filtered on - a match means the booking already has the target status.
+    already_set = solteq_tand_db_object.get_list_of_bookings(
+        filters={
+            "p.cpr": cpr,
+            "b.BookingText": booking_text,
+            "b.Status": status_id,
+        }
     )
 
-    return db_handler._execute_query(final_query, tuple(params))
+    if already_set:
+        logger.info(f"Booking status is already '{status_text}', skipping update.")
+        return
+
+    logger.info(f"Locating tilflytter booking to set status to '{status_text}'.")
+
+    appointments = solteq_app.get_list_of_appointments()
+    controls = appointments.get("controls", [])
+    value_columns = [key for key in appointments if key != "controls"]
+
+    booking_control = None
+    for index, control in enumerate(controls):
+        row_values = [appointments[column][index] for column in value_columns]
+
+        # Match on the distinctive booking text, falling back to the booking type
+        if booking_text in row_values or "Z - Tilflytter" in row_values:
+            booking_control = control
+            break
+
+    if booking_control is None:
+        raise RuntimeError("Could not locate the tilflytter booking to update its status.")
+
+    # Approve the change despite the "no availability for chair/behandler" warning
+    # that the Z - Tilflytter admin booking always triggers ("Godkend trods advarsel").
+    solteq_app.change_appointment_status_handle_warning(appointment_control=booking_control, set_status=status_text, warning_button="ButtonOk")
+
+    time.sleep(3)  # Wait for the status change to be registered in the database
+
+    verify = solteq_tand_db_object.get_list_of_bookings(
+        filters={
+            "p.cpr": cpr,
+            "b.BookingText": booking_text,
+            "b.Status": status_id,
+        }
+    )
+
+    if not verify:
+        raise RuntimeError(f"Setting booking status to '{status_text}' failed.")
+
+    logger.info(f"Booking status set to '{status_text}' successfully.")
+
+
+def check_and_create_journal_note(solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, cpr: str, note_message: str):
+    """
+    Check if a journal note exists in Solteq Tand, and create it if not
+    """
+
+    logger.info("Checking if journal note already exists.")
+
+    filters = {
+        "p.cpr": cpr,
+        "dn.Beskrivelse": note_message,
+    }
+
+    journal_notes = solteq_tand_db_object.get_list_of_journal_notes(filters=filters)
+
+    if not journal_notes:
+        solteq_app.create_journal_note(note_message=note_message, checkmark_in_complete=True)
+
+        time.sleep(3)  # Wait for the journal note to be registered in the database
+
+        if not solteq_tand_db_object.get_list_of_journal_notes(filters=filters):
+            raise RuntimeError("Journal note creation failed.")
+
+        logger.info("Journal note was created successfully.")
+
+    else:
+        logger.info("Journal note already exists, skipping creation.")

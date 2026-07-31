@@ -3,12 +3,13 @@
 import os
 import logging
 
-from datetime import date
+from datetime import date, datetime
 
+from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
-
 from mbu_process_dashboard_shared_components.process_dashboard_client import ProcessDashboardClient
 from mbu_process_dashboard_shared_components import (
+    process,
     process_run,
     process_step_run,
 )
@@ -26,15 +27,22 @@ os.environ["ATS_TOKEN"] = os.getenv("ATS_TOKEN_DEV")
 os.environ["ATS_URL"] = os.getenv("ATS_URL_DEV")
 
 
-def get_age_category(cpr: str, on_date: date | None = None) -> str:
+def get_age_category(cpr: str, on_date: date | None = None) -> tuple[str, str]:
     """
-    Helper to find a citizen's age category from their CPR.
+    Helper to find a citizen's age category and booking status from their CPR.
 
     Categories:
-    - "0_to_14": 0-14 years (to parents only)
+    - "0_to_5": 0-5 years (to parents only)
+    - "6_to_14": 6-14 years (to parents only)
     - "15_to_17": 15-17 years (to parents and patient)
     - "18_to_21y8m": 18 to before 21 years 9 months (to young adult)
     - "21y9m_and_older": 21 years 9 months and older
+
+    Returns:
+        tuple: (age_category, booking_status) where booking_status is the
+        booking aftalestatus: "Tilflytter - Afventer godkendelse" for citizens
+        under 18 (welcome letter must be approved before sending) and
+        "Tilflytter - Afsendelse godkendt" for citizens 18 and older.
     """
 
     s = cpr.replace("-", "").strip()
@@ -70,30 +78,71 @@ def get_age_category(cpr: str, on_date: date | None = None) -> str:
     if (today.month, today.day) < (birthdate.month, birthdate.day):
         age_years -= 1
 
-    # Category 1: 0-14 years
-    if age_years < 15:
-        return "0_to_14"
+    # Category 1a: 0-5 years
+    if age_years < 6:
+        age_category = "0_to_5"
+
+    # Category 1b: 6-14 years
+    elif age_years < 15:
+        age_category = "6_to_14"
 
     # Category 2: 15-17 years
+    elif age_years < 18:
+        age_category = "15_to_17"
+
+    else:
+        # Category 3 & 4: Calculate 21 years 9 months cutoff
+        cutoff_date = today - relativedelta(years=21, months=9)
+
+        if birthdate <= cutoff_date:
+            age_category = "21y9m_and_older"
+
+        else:
+            age_category = "18_to_21y8m"
+
+    # Under 18 the welcome letter must be approved before it is sent
     if age_years < 18:
-        return "15_to_17"
+        booking_status = "Tilflytter - Afventer godkendelse"
 
-    # Category 3 & 4: Calculate 21 years 9 months cutoff
-    cutoff_year = today.year - 21
-    cutoff_month = today.month - 9
+    else:
+        booking_status = "Tilflytter - Afsendelse godkendt"
 
-    if cutoff_month <= 0:
-        cutoff_month += 12
-        cutoff_year -= 1
+    return age_category, booking_status
 
-    cutoff_date = date(cutoff_year, cutoff_month, today.day)
 
-    # Category 4: 21 years 9 months and older
-    if birthdate <= cutoff_date:
-        return "21y9m_and_older"
+def current_timestamp() -> str:
+    """Return the current timestamp as an ISO 8601 string."""
+    return datetime.now().isoformat()
 
-    # Category 3: 18 to before 21 years 9 months
-    return "18_to_21y8m"
+
+def update_process_run_metadata(cpr: str, meta_update: dict, process_name: str = "Tilflytter til Aarhus Kommune") -> dict:
+    """
+    Merge fields into an existing process run's metadata.
+
+    The metadata endpoint merges the supplied fields into the run's existing
+    meta, so only the keys to change need to be passed. Used to record the
+    actual welcome-document send time, which for under-18 citizens happens on a
+    later run than when the run (and its initial meta) was created.
+    """
+
+    process_id = process.get_dashboard_process_id(client=CLIENT, process_name=process_name)
+
+    if not process_id:
+        raise RuntimeError("Process ID not found for process name.")
+
+    process_run_id = process_run.get_dashboard_run_id(client=CLIENT, process_id=int(process_id), cpr=cpr)
+
+    if not process_run_id:
+        raise RuntimeError("Process run ID not found.")
+
+    response = CLIENT.patch(endpoint=f"/runs/{process_run_id}/metadata", json={"meta": meta_update}, timeout=30)
+
+    if response.status_code != 200:
+        raise RuntimeError(f"Failed to update process run metadata. Status code: {response.status_code}, Response: {response.text}")
+
+    logger.info("Process run metadata updated: %s", meta_update)
+
+    return response.json()
 
 
 def handle_dashboard_run_creation(process_name: str, meta: dict):
@@ -112,6 +161,25 @@ def handle_dashboard_run_creation(process_name: str, meta: dict):
 
     else:
         process_run.create_dashboard_run(client=CLIENT, process_name=process_name, meta=meta)
+
+
+def get_process_run_meta(process_name: str, cpr: str):
+    """
+    Return the meta dict of the citizen's most recent process run for the process,
+    or None if no run exists. Used to reuse first-run values (e.g. age_category)
+    across resumes instead of recomputing them each run.
+    """
+
+    process_id, _ = process.find_process_id_and_steps(client=CLIENT, process_name=process_name)
+
+    response = CLIENT.get(
+        f"runs/?process_id={process_id}&meta_filter=cpr%3A{cpr}&order_by=created_at&sort_direction=desc&page=1&size=1",
+        timeout=10,
+    )
+
+    items = response.json().get("items", [])
+
+    return items[0].get("meta") if items else None
 
 
 def handle_process_dashboard(status: str, item_reference: str, process_step_name: str, failure: Exception | None = None, process_name: str = "Tilflytter til Aarhus Kommune"):
@@ -142,3 +210,20 @@ def handle_process_dashboard(status: str, item_reference: str, process_step_name
     updated_step_run_data, status_code = process_step_run.update_dashboard_step_run_by_id(client=CLIENT, step_run_id=step_run_id, update_data=step_run_update_data)
 
     return updated_step_run_data, status_code
+
+
+def set_all_steps_pending(process_name: str, cpr: str):
+    """
+    TEST HELPER: set every step of the citizen's process run to "pending".
+    Useful for re-running the flow against the same citizen without stale step states.
+    """
+
+    _, steps = process.find_process_id_and_steps(client=CLIENT, process_name=process_name)
+
+    for step in steps:
+        step_name = step.get("name")
+
+        if not step_name:
+            continue
+
+        handle_process_dashboard(status="pending", item_reference=cpr, process_step_name=step_name, process_name=process_name)
