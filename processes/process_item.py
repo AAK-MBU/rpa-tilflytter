@@ -188,4 +188,10 @@ def process_item(item_data: dict, item_reference: str):
     except Exception as e:
         logger.info(f"error! {e}")
 
+        # Always leave the patient window closed when pausing/rejecting an item
+        try:
+            solteq_app.close_patient_window()
+        except Exception:
+            logger.exception("Failed to close patient window after Exception")
+
         raise e
