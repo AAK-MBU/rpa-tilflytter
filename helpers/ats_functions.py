@@ -8,8 +8,8 @@ import requests
 from automation_server_client import AutomationServer, WorkItem, Workqueue
 from dotenv import load_dotenv
 
-ATS_TOKEN = os.getenv("ATS_TOKEN_DEV")
-ATS_URL = os.getenv("ATS_URL_DEV")
+ATS_TOKEN = os.getenv("ATS_TOKEN")
+ATS_URL = os.getenv("ATS_URL")
 
 
 def get_workqueue_items(workqueue: Workqueue, return_data=False):

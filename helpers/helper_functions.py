@@ -20,11 +20,10 @@ logger = logging.getLogger(__name__)
 
 API_ADMIN_TOKEN = os.getenv("API_ADMIN_TOKEN")
 
-DASHBOARD_BASE_URL = os.getenv("DASHBOARD_BASE_URL", "https://dev-mbu-dashboard-api.adm.aarhuskommune.dk/api/v1")
-CLIENT = ProcessDashboardClient(api_admin_token=API_ADMIN_TOKEN, base_url=DASHBOARD_BASE_URL)
+CLIENT = ProcessDashboardClient(api_admin_token=API_ADMIN_TOKEN)
 
-os.environ["ATS_TOKEN"] = os.getenv("ATS_TOKEN_DEV")
-os.environ["ATS_URL"] = os.getenv("ATS_URL_DEV")
+os.environ["ATS_TOKEN"] = os.getenv("ATS_TOKEN")
+os.environ["ATS_URL"] = os.getenv("ATS_URL")
 
 
 def get_age_category(cpr: str, on_date: date | None = None) -> tuple[str, str]:

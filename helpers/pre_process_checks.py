@@ -25,9 +25,8 @@ def main():
     process_name = "Tilflytter til Aarhus Kommune"
 
     API_ADMIN_TOKEN = os.getenv("API_ADMIN_TOKEN")
-    DASHBOARD_BASE_URL = os.getenv("DASHBOARD_BASE_URL", "https://dev-mbu-dashboard-api.adm.aarhuskommune.dk/api/v1")
 
-    client = ProcessDashboardClient(api_admin_token=API_ADMIN_TOKEN, base_url=DASHBOARD_BASE_URL)
+    client = ProcessDashboardClient(api_admin_token=API_ADMIN_TOKEN)
 
     process_id, process_steps = process.find_process_id_and_steps(client=client, process_name=process_name)
 
