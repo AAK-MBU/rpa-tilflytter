@@ -90,7 +90,7 @@ def process_item(item_data: dict, item_reference: str):
 
             # STEP 2 - afvikl tilflytter hændelse i Solteq Tand
             logger.info("Step 2 - Handling tilflytter event in Solteq")
-            # solteq_helper.check_and_handle_event(solteq_app=solteq_app, cpr=citizen_cpr, solteq_tand_db_object=solteq_tand_db_object, event_name=tilflytter_event_name)
+            solteq_helper.check_and_handle_event(solteq_app=solteq_app, cpr=citizen_cpr, solteq_tand_db_object=solteq_tand_db_object, event_name=tilflytter_event_name)
 
             # Under 18: ensure the approval event exists, then pause until it has been approved.
             # A confirming service re-queues the item once approval is given; on that re-run the
@@ -119,10 +119,10 @@ def process_item(item_data: dict, item_reference: str):
                 logger.info("Citizen and/or parents are registered for Digital Post")
 
                 logger.info("Handling the creation of the welcome document")
-                # document_file_name = solteq_helper.check_and_create_welcome_document(item_data=item_data, solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, age_category=age_category)
+                document_file_name = solteq_helper.check_and_create_welcome_document(item_data=item_data, solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, age_category=age_category)
 
                 logger.info("Handling the sending of the welcome document")
-                # solteq_helper.check_and_send_welcome_document(item_data=item_data, solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, welcome_document_filename=document_file_name)
+                solteq_helper.check_and_send_welcome_document(item_data=item_data, solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, welcome_document_filename=document_file_name)
 
                 helper_functions.handle_process_dashboard(status="success", item_reference=item_reference, process_step_name="Digital post udsendt", failure=None, process_name=process_name)
 
@@ -132,8 +132,8 @@ def process_item(item_data: dict, item_reference: str):
                 logger.info("Updating process run metadata with actual welcome document sent timestamp")
                 helper_functions.update_process_run_metadata(cpr=citizen_cpr, meta_update={"booking_status": "Tilflytter - Velkomstbrev udsendt", "welcome_document_sent_timestamp": helper_functions.current_timestamp()}, process_name=process_name)
 
-                # logger.info("Creating administrative note for welcome letter")
-                # solteq_helper.check_and_create_journal_note(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, cpr=citizen_cpr, note_message="Velkomstbrev er sendt. Se Dokumenter")
+                logger.info("Creating administrative note for welcome letter")
+                solteq_helper.check_and_create_journal_note(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, cpr=citizen_cpr, note_message="Velkomstbrev er sendt. Se Dokumenter")
 
             else:
                 logger.info("Citizen and parents are not registered for Digital Post - manual send flow")
@@ -142,7 +142,7 @@ def process_item(item_data: dict, item_reference: str):
                 # and handles this event. The robot creates the event, then pauses until the
                 # event is handled AND the document exists, at which point it marks the booking sent.
                 manual_send_event = "Tilflytter - Ikke tilmeldt digital post - udsend brev manuelt"
-                # solteq_helper.check_and_create_new_event(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, event_name=manual_send_event, cpr=citizen_cpr)
+                solteq_helper.check_and_create_new_event(solteq_app=solteq_app, solteq_tand_db_object=solteq_tand_db_object, event_name=manual_send_event, cpr=citizen_cpr)
 
                 event_handled = solteq_helper.is_event_processed(solteq_tand_db_object=solteq_tand_db_object, cpr=citizen_cpr, event_name=manual_send_event)
                 document_exists = solteq_helper.welcome_document_exists(solteq_tand_db_object=solteq_tand_db_object, cpr=citizen_cpr)
