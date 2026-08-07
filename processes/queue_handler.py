@@ -31,9 +31,8 @@ def retrieve_items_for_queue() -> list[dict]:
 
     filters = {
         "e.currentStateText": [
-            # "Ny tilflytter",
-            # "Kendt tilflytter",
-            "TEST: Ny tilflytter",
+            "Ny tilflytter",
+            "Kendt tilflytter",
         ],
         "e.archived": 0,
     }
