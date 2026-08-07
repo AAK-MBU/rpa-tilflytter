@@ -1,12 +1,18 @@
-"""Handle the creation of discharge documents based on patient age."""
+"""Solteq Tand helpers for the tilflytter flow.
+
+Each check_and_* function is idempotent: it inspects Solteq's current state and only
+performs its action (create a document, event, note or booking; send the letter; set a
+status) when it has not already been done, then verifies the result. This lets the whole
+process be re-run safely after a pause or a failure without duplicating work.
+"""
 
 import logging
 import os
 import time
 
 import datetime
-
 from dateutil.relativedelta import relativedelta
+
 from mbu_rpa_core.exceptions import BusinessError
 from mbu_solteqtand_shared_components.application import SolteqTandApp
 from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
@@ -119,12 +125,12 @@ def check_and_create_welcome_document(item_data: dict, solteq_app: SolteqTandApp
 
 def check_and_send_welcome_document(item_data: dict, solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, welcome_document_filename: str):
     """
-    Check if the welcome document is already sent to DigitalPost; if not, send it.
-    This function checks for the existence of welcome document within the last month
-    and sends it to DigitalPost if it has not been sent yet.
+    Send the welcome letter to Digital Post, unless it has already been sent.
+
+    A document is considered already sent when it exists (within the last month) and its
+    SentToNemSMS flag is set, so re-runs after a pause do not send it a second time.
     """
 
-    # Check if the discharge document is already sent to DigitalPost; if not, send it.
     logger.info("Checking if the welcome document is already sent to DigitalPost.")
 
     list_of_documents = get_welcome_documents(solteq_tand_db_object, item_data["cpr"], welcome_document_filename)
@@ -133,7 +139,7 @@ def check_and_send_welcome_document(item_data: dict, solteq_app: SolteqTandApp, 
         list_of_documents
         and not list_of_documents[0]["SentToNemSMS"]
     ):
-        logger.info("Discharge document not sent to DigitalPost, proceeding to send.")
+        logger.info("Welcome document not sent to DigitalPost, proceeding to send.")
 
         discharge_document_metadata = {
             "documentTitle": welcome_document_filename + ".pdf",
@@ -159,10 +165,10 @@ def check_and_send_welcome_document(item_data: dict, solteq_app: SolteqTandApp, 
 
 def get_welcome_documents(solteq_tand_db_object: SolteqTandDatabase, cpr: str, welcome_document_filename: str = "Velkomstbrev"):
     """
-    Return the welcome documents journalised for the citizen within the last month.
+    Return the citizen's welcome-letter documents journalised within the last month.
 
-    The tilflytter-specific bits (the "Velkomstbrev" name and the one-month window)
-    live here; the generic document lookup lives in SolteqTandDatabase.get_documents.
+    The one-month window scopes the lookup to the current tilflytter run, so a document
+    from an earlier run for the same citizen is not mistaken for this run's letter.
     """
 
     one_month_ago = datetime.datetime.now() - relativedelta(months=1)
@@ -182,13 +188,17 @@ def welcome_document_exists(solteq_tand_db_object: SolteqTandDatabase, cpr: str,
 
 def check_and_handle_event(solteq_app: SolteqTandApp, cpr: str, solteq_tand_db_object: SolteqTandDatabase, event_name):
     """
-    Afvikler den nyligt oprettede tilflytter hændelse
+    Process the citizen's newly created tilflytter event in Solteq Tand.
+
+    Idempotent: an already-processed (archived) event is left alone. If the event is not
+    present at all - neither processed nor pending - a BusinessError is raised, since the
+    citizen is expected to have it before this runs.
     """
 
     logger.info("Checking if event is already processed.")
 
-    # Processing an event flips e.archived from 0 to 1, so archived events
-    # with this state text mean the event has already been processed.
+    # Processing an event flips e.archived from 0 to 1, so an archived event
+    # with this state text means it has already been processed.
     filters = {
         "e.currentStateText": [
             f"{event_name}",

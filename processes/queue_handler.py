@@ -1,4 +1,8 @@
-"""Module to hande queue population"""
+"""Populate the workqueue with citizens to process.
+
+Runs the pre-queue checks first, then finds new-mover ("tilflytter") events in Solteq
+that have not yet been handled and turns each into a work item for the main flow.
+"""
 
 import asyncio
 import json
@@ -16,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def retrieve_items_for_queue() -> list[dict]:
-    """Function to populate queue"""
+    """Run the pre-queue checks, then build a work item for each unhandled tilflytter event."""
 
     references = []
     data = []
@@ -31,7 +35,7 @@ def retrieve_items_for_queue() -> list[dict]:
             # "Kendt tilflytter",
             "TEST: Ny tilflytter",
         ],
-        "e.archived": 0
+        "e.archived": 0,
     }
 
     events = db_handler.get_list_of_events(
@@ -60,7 +64,7 @@ def retrieve_items_for_queue() -> list[dict]:
             "name": ev.get("fullName"),
             "event_name": ev_title,
             "event_created_date": event_created_date.isoformat(),
-            "event_last_modified": ev.get("timestamp").isoformat()
+            "event_last_modified": ev.get("timestamp").isoformat(),
         }
 
         references.append(citizen_cpr)

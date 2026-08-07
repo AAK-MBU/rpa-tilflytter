@@ -7,7 +7,9 @@ from datetime import date, datetime
 
 from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
-from mbu_process_dashboard_shared_components.process_dashboard_client import ProcessDashboardClient
+from mbu_process_dashboard_shared_components.process_dashboard_client import (
+    ProcessDashboardClient,
+)
 from mbu_process_dashboard_shared_components import (
     process,
     process_run,
@@ -114,7 +116,9 @@ def current_timestamp() -> str:
     return datetime.now().isoformat()
 
 
-def update_process_run_metadata(cpr: str, meta_update: dict, process_name: str = "Tilflytter til Aarhus Kommune") -> dict:
+def update_process_run_metadata(
+    cpr: str, meta_update: dict, process_name: str = "Tilflytter til Aarhus Kommune"
+) -> dict:
     """
     Merge fields into an existing process run's metadata.
 
@@ -124,20 +128,30 @@ def update_process_run_metadata(cpr: str, meta_update: dict, process_name: str =
     later run than when the run (and its initial meta) was created.
     """
 
-    process_id = process.get_dashboard_process_id(client=CLIENT, process_name=process_name)
+    process_id = process.get_dashboard_process_id(
+        client=CLIENT, process_name=process_name
+    )
 
     if not process_id:
         raise RuntimeError("Process ID not found for process name.")
 
-    process_run_id = process_run.get_dashboard_run_id(client=CLIENT, process_id=int(process_id), cpr=cpr)
+    process_run_id = process_run.get_dashboard_run_id(
+        client=CLIENT, process_id=int(process_id), cpr=cpr
+    )
 
     if not process_run_id:
         raise RuntimeError("Process run ID not found.")
 
-    response = CLIENT.patch(endpoint=f"/runs/{process_run_id}/metadata", json={"meta": meta_update}, timeout=30)
+    response = CLIENT.patch(
+        endpoint=f"/runs/{process_run_id}/metadata",
+        json={"meta": meta_update},
+        timeout=30,
+    )
 
     if response.status_code != 200:
-        raise RuntimeError(f"Failed to update process run metadata. Status code: {response.status_code}, Response: {response.text}")
+        raise RuntimeError(
+            f"Failed to update process run metadata. Status code: {response.status_code}, Response: {response.text}"
+        )
 
     logger.info("Process run metadata updated: %s", meta_update)
 
@@ -153,13 +167,17 @@ def handle_dashboard_run_creation(process_name: str, meta: dict):
 
     citizen_cpr = meta.get("cpr")
 
-    existing_run_id = process_run.get_process_run_by_cpr(client=CLIENT, process_name=process_name, cpr=citizen_cpr)
+    existing_run_id = process_run.get_process_run_by_cpr(
+        client=CLIENT, process_name=process_name, cpr=citizen_cpr
+    )
 
     if existing_run_id:
         logger.info("Process run already exists for citizen")
 
     else:
-        process_run.create_dashboard_run(client=CLIENT, process_name=process_name, meta=meta)
+        process_run.create_dashboard_run(
+            client=CLIENT, process_name=process_name, meta=meta
+        )
 
 
 def get_process_run_meta(process_name: str, cpr: str):
@@ -169,7 +187,9 @@ def get_process_run_meta(process_name: str, cpr: str):
     across resumes instead of recomputing them each run.
     """
 
-    process_id, _ = process.find_process_id_and_steps(client=CLIENT, process_name=process_name)
+    process_id, _ = process.find_process_id_and_steps(
+        client=CLIENT, process_name=process_name
+    )
 
     response = CLIENT.get(
         f"runs/?process_id={process_id}&meta_filter=cpr%3A{cpr}&order_by=created_at&sort_direction=desc&page=1&size=1",
@@ -181,23 +201,34 @@ def get_process_run_meta(process_name: str, cpr: str):
     return items[0].get("meta") if items else None
 
 
-def handle_process_dashboard(status: str, item_reference: str, process_step_name: str, failure: Exception | None = None, process_name: str = "Tilflytter til Aarhus Kommune"):
+def handle_process_dashboard(
+    status: str,
+    item_reference: str,
+    process_step_name: str,
+    failure: Exception | None = None,
+    process_name: str = "Tilflytter til Aarhus Kommune",
+):
     """
     Method for handling updating the process dashboard
     """
 
-    status_update_data = {
-        "status": status
-    }
+    status_update_data = {"status": status}
 
     citizen_cpr = item_reference
 
     logger.info("before get_step_run_id_for_process_step_cpr() ...")
 
-    step_run_id = process_step_run.get_step_run_id_for_process_step_cpr(client=CLIENT, process_name=process_name, step_name=process_step_name, cpr=citizen_cpr)
+    step_run_id = process_step_run.get_step_run_id_for_process_step_cpr(
+        client=CLIENT,
+        process_name=process_name,
+        step_name=process_step_name,
+        cpr=citizen_cpr,
+    )
 
     if failure:
-        step_run_update_data = process_step_run.build_step_run_update(status=status, failure=failure)
+        step_run_update_data = process_step_run.build_step_run_update(
+            status=status, failure=failure
+        )
 
         status_update_data["failure"] = failure
 
@@ -206,7 +237,11 @@ def handle_process_dashboard(status: str, item_reference: str, process_step_name
 
     logger.info("before update_dashboard_step_run_by_id() ...")
 
-    updated_step_run_data, status_code = process_step_run.update_dashboard_step_run_by_id(client=CLIENT, step_run_id=step_run_id, update_data=step_run_update_data)
+    updated_step_run_data, status_code = (
+        process_step_run.update_dashboard_step_run_by_id(
+            client=CLIENT, step_run_id=step_run_id, update_data=step_run_update_data
+        )
+    )
 
     return updated_step_run_data, status_code
 
@@ -217,7 +252,9 @@ def set_all_steps_pending(process_name: str, cpr: str):
     Useful for re-running the flow against the same citizen without stale step states.
     """
 
-    _, steps = process.find_process_id_and_steps(client=CLIENT, process_name=process_name)
+    _, steps = process.find_process_id_and_steps(
+        client=CLIENT, process_name=process_name
+    )
 
     for step in steps:
         step_name = step.get("name")
@@ -225,4 +262,9 @@ def set_all_steps_pending(process_name: str, cpr: str):
         if not step_name:
             continue
 
-        handle_process_dashboard(status="pending", item_reference=cpr, process_step_name=step_name, process_name=process_name)
+        handle_process_dashboard(
+            status="pending",
+            item_reference=cpr,
+            process_step_name=step_name,
+            process_name=process_name,
+        )

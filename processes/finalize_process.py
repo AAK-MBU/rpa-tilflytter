@@ -1,7 +1,10 @@
-"""Module to handle process finalization"""
-# from mbu_rpa_core.exceptions import ProcessError, BusinessError
+"""Process finalization step.
+
+Runs once after the whole workqueue has been processed. There is currently no
+end-of-run work to do for the tilflytter process, so this is a no-op placeholder.
+"""
 
 
 def finalize_process():
-    """Function to handle process finalization"""
+    """Run any end-of-process cleanup. Currently nothing is required."""
     return

@@ -29,9 +29,7 @@ def startup():
         password = creds["decrypted_password"]
 
     solteq_app = SolteqTandApp(
-        app_path=config.APP_PATH,
-        username=username,
-        password=password
+        app_path=config.APP_PATH, username=username, password=password
     )
 
     solteq_app.start_application()
@@ -61,7 +59,9 @@ def hard_close():
             logger.info(kill_msg)
 
         except CalledProcessError as e:
-            logger.error(f"TMTand.exe found in subprocesses, but error while killing it: {e}")
+            logger.error(
+                f"TMTand.exe found in subprocesses, but error while killing it: {e}"
+            )
 
 
 def close():
