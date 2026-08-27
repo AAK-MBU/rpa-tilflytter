@@ -343,7 +343,7 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
 
             if age_category == "21y9m_and_older":
                 helper_functions.handle_process_dashboard(
-                    status="success",
+                    status="optional",
                     item_reference=item_reference,
                     process_step_name="Tilflytter under 21 år og 9 måneder",
                     failure=None,
@@ -352,7 +352,7 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
 
             else:
                 helper_functions.handle_process_dashboard(
-                    status="optional",
+                    status="success",
                     item_reference=item_reference,
                     process_step_name="Tilflytter under 21 år og 9 måneder",
                     failure=None,
