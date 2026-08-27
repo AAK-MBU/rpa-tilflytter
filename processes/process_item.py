@@ -330,16 +330,6 @@ def process_item(item_data: dict, item_reference: str):
             # the digital and manual paths, so the age is recorded however the letter was sent.
             logger.info("Step 5 - Handling tilflytter age step in process dashboard")
             if age_category == "21y9m_and_older":
-                logger.info(
-                    "Citizen in 21y9m_and_older age category --> creating event in Solteq"
-                )
-                solteq_helper.check_and_create_new_event(
-                    solteq_app=solteq_app,
-                    solteq_tand_db_object=solteq_tand_db_object,
-                    event_name="Tilflytter 21 år og 9 måneder ved tilflytning",
-                    cpr=citizen_cpr,
-                )
-
                 helper_functions.handle_process_dashboard(
                     status="optional",
                     item_reference=item_reference,
