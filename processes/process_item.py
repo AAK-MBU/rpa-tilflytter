@@ -53,7 +53,7 @@ def process_item(item_data: dict, item_reference: str):
             solteq_helper.check_and_create_new_event(
                 solteq_app=solteq_app,
                 solteq_tand_db_object=solteq_tand_db_object,
-                event_name="Formular ikke indsendt inden for tidsfristen",
+                event_name="Tilflytter - Formular ikke indsendt inden for tidsfristen",
                 cpr=citizen_cpr,
             )
 
@@ -67,7 +67,7 @@ def process_item(item_data: dict, item_reference: str):
             solteq_helper.check_and_create_new_event(
                 solteq_app=solteq_app,
                 solteq_tand_db_object=solteq_tand_db_object,
-                event_name="Tilflytter 21 år og 9 måneder - Formular ikke udfyldt",
+                event_name="Tilflytter - Tilflytter 21 år og 9 måneder - Formular ikke udfyldt",
                 cpr=citizen_cpr,
             )
 
@@ -154,7 +154,7 @@ def process_item(item_data: dict, item_reference: str):
                 logger.info(
                     "Citizen is under 18 - handling 'Godkend afsendelse af velkomstbrev' event"
                 )
-                approve_document_event = "Godkend afsendelse af velkomstbrev"
+                approve_document_event = "Tilflytter - Godkend afsendelse af velkomstbrev"
                 solteq_helper.check_and_create_new_event(
                     solteq_app=solteq_app,
                     solteq_tand_db_object=solteq_tand_db_object,
