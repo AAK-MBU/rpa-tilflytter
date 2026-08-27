@@ -472,22 +472,43 @@ def check_and_set_booking_status(solteq_app: SolteqTandApp, solteq_tand_db_objec
     logger.info(f"Booking status set to '{status_text}' successfully.")
 
 
-def check_and_create_journal_note(solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, cpr: str, note_message: str):
+def journal_note_db_value(note_message: str) -> str:
     """
-    Check if a journal note exists in Solteq Tand, and create it if not
+    The value Solteq stores in dn.Beskrivelse for a journal note.
+
+    A note is written in the UI as "<type> <message>" - e.g. "Administrativt notat
+    'Velkomstbrev er sendt. Se Dokumenter'" - but Solteq splits the two apart: the type is
+    the note's category, and dn.Beskrivelse always holds just the message, without the
+    quotes it is displayed in. Looking a note up by the combined string therefore never
+    matches, however long you wait for it.
+    """
+
+    return note_message.replace("'", "")
+
+
+def check_and_create_journal_note(solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, cpr: str, note_type: str, note_message: str):
+    """
+    Check if a journal note exists in Solteq Tand, and create it if not.
+
+    note_type is the note's category in Solteq ("Administrativt notat"); note_message is the
+    note text, quoted the way Solteq displays it ("'Velkomstbrev er sendt. Se Dokumenter'").
+    The UI is given the two joined together, the database is queried on the message alone -
+    see journal_note_db_value.
     """
 
     logger.info("Checking if journal note already exists.")
 
+    note_db_value = journal_note_db_value(note_message)
+
     filters = {
         "p.cpr": cpr,
-        "dn.Beskrivelse": note_message,
+        "dn.Beskrivelse": note_db_value,
     }
 
     journal_notes = solteq_tand_db_object.get_list_of_journal_notes(filters=filters)
 
     if not journal_notes:
-        solteq_app.create_journal_note(note_message=note_message, checkmark_in_complete=True)
+        solteq_app.create_journal_note(note_message=f"{note_type} {note_message}", checkmark_in_complete=True)
 
         # Wait for the journal note to be registered in the database, re-checking every few
         # seconds rather than giving up after the first look.
@@ -501,8 +522,8 @@ def check_and_create_journal_note(solteq_app: SolteqTandApp, solteq_tand_db_obje
 
             if time.monotonic() >= deadline:
                 raise RuntimeError(
-                    f"Journal note creation failed - '{note_message}' did not appear in the "
-                    f"database within {JOURNAL_NOTE_CONFIRM_TIMEOUT_SECONDS} seconds."
+                    f"Journal note creation failed - '{note_db_value}' did not appear in "
+                    f"dn.Beskrivelse within {JOURNAL_NOTE_CONFIRM_TIMEOUT_SECONDS} seconds."
                 )
 
             logger.info("Journal note not registered in the database yet - re-checking.")

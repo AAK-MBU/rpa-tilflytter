@@ -333,7 +333,8 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                 solteq_app=solteq_app,
                 solteq_tand_db_object=solteq_tand_db_object,
                 cpr=citizen_cpr,
-                note_message="Administrativt notat 'Velkomstbrev er sendt. Se Dokumenter'",
+                note_type="Administrativt notat",
+                note_message="'Velkomstbrev er sendt. Se Dokumenter'",
             )
 
             # STEP 5 - flag citizens who have reached 21 years 9 months. This applies on both
