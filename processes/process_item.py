@@ -116,7 +116,7 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
 
             # Register a process-dashboard run for the citizen so the flow can be tracked
             # and resumed. welcome_document_sent_timestamp stays empty until the letter is
-            # actually sent - the 3-month form deadline is measured from that timestamp.
+            # actually sent - the 4-week form deadline is measured from that timestamp.
             logger.info("Step 1 - Creating process run")
             meta = {
                 "cpr": citizen_cpr,
