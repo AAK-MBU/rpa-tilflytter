@@ -53,8 +53,12 @@ def get_workqueue_items(workqueue: Workqueue, return_data=False):
 
 
 def get_item_info(item: WorkItem):
-    """Unpack item"""
-    return item.data["item"]["data"], item.data["item"]["reference"]
+    """Unpack item.
+
+    The ATS work item id is returned alongside the payload so business errors can carry
+    it to the process dashboard as a rerun target (see processes/process_item.py).
+    """
+    return item.data["item"]["data"], item.data["item"]["reference"], item.id
 
 
 def init_logger():

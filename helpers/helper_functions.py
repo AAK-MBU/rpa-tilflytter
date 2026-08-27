@@ -207,9 +207,14 @@ def handle_process_dashboard(
     process_step_name: str,
     failure: Exception | None = None,
     process_name: str = "Tilflytter til Aarhus Kommune",
+    rerun_config: dict | None = None,
 ):
     """
     Method for handling updating the process dashboard
+
+    rerun_config carries the ATS work item id as {"workitem_id": <id>}. The dashboard
+    API stores it on the step run and its rerun endpoint uses it to set that work item
+    back to "new", which is what lets a failed/paused step be rerun from the dashboard.
     """
 
     status_update_data = {"status": status}
@@ -227,13 +232,15 @@ def handle_process_dashboard(
 
     if failure:
         step_run_update_data = process_step_run.build_step_run_update(
-            status=status, failure=failure
+            status=status, failure=failure, rerun_config=rerun_config
         )
 
         status_update_data["failure"] = failure
 
     else:
-        step_run_update_data = process_step_run.build_step_run_update(status=status)
+        step_run_update_data = process_step_run.build_step_run_update(
+            status=status, rerun_config=rerun_config
+        )
 
     logger.info("before update_dashboard_step_run_by_id() ...")
 

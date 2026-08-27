@@ -24,11 +24,12 @@ from processes.application_handler import get_app
 logger = logging.getLogger(__name__)
 
 
-def process_item(item_data: dict, item_reference: str):
+def process_item(item_data: dict, item_reference: str, item_id: int):
     """Function to handle item processing"""
 
     assert item_data, "Item data is required"
     assert item_reference, "Item reference is required"
+    assert item_id, "Item id is required"
 
     db_conn_string = os.getenv("DBCONNECTIONSTRINGSOLTEQTAND")
 
@@ -38,6 +39,14 @@ def process_item(item_data: dict, item_reference: str):
     process_name = "Tilflytter til Aarhus Kommune"
 
     tilflytter_event_name = item_data.get("event_name")
+
+    # Which dashboard step a BusinessError raised below belongs to, and the status to
+    # report it with. Updated as the flow moves from step to step; the BusinessError
+    # handler reads them so every raise site - including the ones inside solteq_helper -
+    # lands on the right step. "pending" marks the deliberate wait-for-human pauses,
+    # "failed" everything else.
+    current_step_name = "Tilflytter registreret"
+    current_step_status = "failed"
 
     try:
         solteq_tand_db_object = SolteqTandDatabase(conn_str=db_conn_string)
@@ -50,6 +59,8 @@ def process_item(item_data: dict, item_reference: str):
         # The invoking queue (a sys.argv flag) selects the branch. The two outcome queues below
         # are populated by pre_process_checks; --tilflytter_registreret is the main flow.
         if "--formular_ikke_indsendt_inden_for_tidsfristen" in sys.argv:
+            current_step_name = "Formular indsendt"
+
             solteq_helper.check_and_create_new_event(
                 solteq_app=solteq_app,
                 solteq_tand_db_object=solteq_tand_db_object,
@@ -64,6 +75,8 @@ def process_item(item_data: dict, item_reference: str):
             )
 
         elif "--tilflytter_overskredet_aldersgraense" in sys.argv:
+            current_step_name = "Tilflytter under 21 år og 9 måneder"
+
             solteq_helper.check_and_create_new_event(
                 solteq_app=solteq_app,
                 solteq_tand_db_object=solteq_tand_db_object,
@@ -155,6 +168,8 @@ def process_item(item_data: dict, item_reference: str):
                     "Citizen is under 18 - handling 'Godkend afsendelse af velkomstbrev' event"
                 )
                 approve_document_event = "Tilflytter - Godkend afsendelse af velkomstbrev"
+                current_step_name = "Velkomstbrev godkendt"
+
                 solteq_helper.check_and_create_new_event(
                     solteq_app=solteq_app,
                     solteq_tand_db_object=solteq_tand_db_object,
@@ -171,13 +186,9 @@ def process_item(item_data: dict, item_reference: str):
                         "Welcome document sending not yet approved - pausing item and awaiting confirmation"
                     )
 
-                    helper_functions.handle_process_dashboard(
-                        status="pending",
-                        item_reference=item_reference,
-                        process_step_name="Velkomstbrev godkendt",
-                        failure=None,
-                        process_name=process_name,
-                    )
+                    # The BusinessError handler reports the step (as pending, with the
+                    # work item id attached so the dashboard can rerun it).
+                    current_step_status = "pending"
 
                     raise BusinessError(
                         "Afventer godkendelse af afsendelse af velkomstbrev."
@@ -198,6 +209,8 @@ def process_item(item_data: dict, item_reference: str):
             # STEP 3 - is the citizen (or a parent) registered for Digital Post? This decides
             # whether the welcome letter is sent digitally or handed to Tandplejen to send by hand.
             logger.info("Step 3 - Checking citizen digital post status")
+            current_step_name = "Velkomstbrev sendt"
+            current_step_status = "failed"
             citizen_tilmeldt_digital_post = solteq_helper.check_digital_post_status(
                 cpr=citizen_cpr, solteq_tand_db_object=solteq_tand_db_object
             )
@@ -295,6 +308,10 @@ def process_item(item_data: dict, item_reference: str):
                         "Manual welcome letter send not yet completed - pausing item and awaiting manual send"
                     )
 
+                    # The BusinessError handler reports the step (as pending, with the
+                    # work item id attached so the dashboard can rerun it).
+                    current_step_status = "pending"
+
                     raise BusinessError("Afventer manuel udsendelse af velkomstbrev.")
 
                 logger.info(
@@ -329,6 +346,8 @@ def process_item(item_data: dict, item_reference: str):
             # STEP 5 - flag citizens who have reached 21 years 9 months. This applies on both
             # the digital and manual paths, so the age is recorded however the letter was sent.
             logger.info("Step 5 - Handling tilflytter age step in process dashboard")
+            current_step_name = "Tilflytter under 21 år og 9 måneder"
+
             if age_category == "21y9m_and_older":
                 helper_functions.handle_process_dashboard(
                     status="optional",
@@ -352,6 +371,22 @@ def process_item(item_data: dict, item_reference: str):
 
     except BusinessError as be:
         logger.info(f"BusinessError: {be}")
+
+        # Report the step the item stopped on and attach the ATS work item id as the
+        # rerun target, so the item can be rerun from the process dashboard. Reporting
+        # must never mask the original BusinessError - main.py needs it to put the work
+        # item into "pending user action".
+        try:
+            helper_functions.handle_process_dashboard(
+                status=current_step_status,
+                item_reference=item_reference,
+                process_step_name=current_step_name,
+                failure=be,
+                process_name=process_name,
+                rerun_config={"workitem_id": item_id},
+            )
+        except Exception:
+            logger.exception("Failed to report BusinessError to process dashboard")
 
         # Always leave the patient window closed when pausing/rejecting an item
         try:
