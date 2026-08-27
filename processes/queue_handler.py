@@ -70,8 +70,6 @@ def retrieve_items_for_queue() -> list[dict]:
 
         data.append(citizen_dict)
 
-        break
-
     items = [
         {"reference": ref, "data": d} for ref, d in zip(references, data, strict=True)
     ]
