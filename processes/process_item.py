@@ -129,14 +129,7 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                 process_name=process_name, meta=meta
             )
 
-            # helper_functions.handle_process_dashboard(status="success", item_reference=item_reference, process_step_name="Tilflytter registreret", failure=None, process_name=process_name)
-            helper_functions.handle_process_dashboard(
-                status="failed",
-                item_reference=item_reference,
-                process_step_name="Tilflytter registreret",
-                failure=None,
-                process_name=process_name,
-            )
+            helper_functions.handle_process_dashboard(status="success", item_reference=item_reference, process_step_name="Tilflytter registreret", failure=None, process_name=process_name)
 
             booking_text = "Velkomstbrev"
 
