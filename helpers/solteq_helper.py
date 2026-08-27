@@ -21,6 +21,13 @@ from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatab
 
 logger = logging.getLogger(__name__)
 
+# A journal note shows up in Solteq's UI before it is queryable here: get_list_of_journal_notes
+# joins through Forloeb/ForloebSymbolisering/DiagnoseStatus, so the row can lag the save by
+# several seconds. Poll for the note instead of assuming one short sleep is enough - otherwise
+# a note that was created just fine fails the whole process.
+JOURNAL_NOTE_CONFIRM_TIMEOUT_SECONDS = 30
+JOURNAL_NOTE_CONFIRM_POLL_SECONDS = 3
+
 
 def refocus_patient_window(solteq_app: SolteqTandApp):
     """
@@ -482,10 +489,23 @@ def check_and_create_journal_note(solteq_app: SolteqTandApp, solteq_tand_db_obje
     if not journal_notes:
         solteq_app.create_journal_note(note_message=note_message, checkmark_in_complete=True)
 
-        time.sleep(3)  # Wait for the journal note to be registered in the database
+        # Wait for the journal note to be registered in the database, re-checking every few
+        # seconds rather than giving up after the first look.
+        deadline = time.monotonic() + JOURNAL_NOTE_CONFIRM_TIMEOUT_SECONDS
 
-        if not solteq_tand_db_object.get_list_of_journal_notes(filters=filters):
-            raise RuntimeError("Journal note creation failed.")
+        while True:
+            time.sleep(JOURNAL_NOTE_CONFIRM_POLL_SECONDS)
+
+            if solteq_tand_db_object.get_list_of_journal_notes(filters=filters):
+                break
+
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    f"Journal note creation failed - '{note_message}' did not appear in the "
+                    f"database within {JOURNAL_NOTE_CONFIRM_TIMEOUT_SECONDS} seconds."
+                )
+
+            logger.info("Journal note not registered in the database yet - re-checking.")
 
         logger.info("Journal note was created successfully.")
 
