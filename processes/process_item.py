@@ -60,7 +60,7 @@ def process_item(item_data: dict, item_reference: str):
             helper_functions.handle_process_dashboard(
                 status="optional",
                 item_reference=item_reference,
-                process_step_name="Formular indsendt inden for tidsfristen",
+                process_step_name="Formular indsendt",
             )
 
         elif "--tilflytter_overskredet_aldersgraense" in sys.argv:
@@ -114,11 +114,6 @@ def process_item(item_data: dict, item_reference: str):
             }
             helper_functions.handle_dashboard_run_creation(
                 process_name=process_name, meta=meta
-            )
-
-            # TEST: reset every step of this run to "pending"
-            helper_functions.set_all_steps_pending(
-                process_name=process_name, cpr=citizen_cpr
             )
 
             # helper_functions.handle_process_dashboard(status="success", item_reference=item_reference, process_step_name="Tilflytter registreret", failure=None, process_name=process_name)
@@ -179,7 +174,7 @@ def process_item(item_data: dict, item_reference: str):
                     helper_functions.handle_process_dashboard(
                         status="pending",
                         item_reference=item_reference,
-                        process_step_name="Borger afventer godkendelse",
+                        process_step_name="Velkomstbrev godkendt",
                         failure=None,
                         process_name=process_name,
                     )
@@ -195,7 +190,7 @@ def process_item(item_data: dict, item_reference: str):
             helper_functions.handle_process_dashboard(
                 status="success",
                 item_reference=item_reference,
-                process_step_name="Borger afventer godkendelse",
+                process_step_name="Velkomstbrev godkendt",
                 failure=None,
                 process_name=process_name,
             )
@@ -229,7 +224,7 @@ def process_item(item_data: dict, item_reference: str):
                 helper_functions.handle_process_dashboard(
                     status="success",
                     item_reference=item_reference,
-                    process_step_name="Digital post udsendt",
+                    process_step_name="Velkomstbrev sendt",
                     failure=None,
                     process_name=process_name,
                 )
@@ -326,7 +321,7 @@ def process_item(item_data: dict, item_reference: str):
                 helper_functions.handle_process_dashboard(
                     status="success",
                     item_reference=item_reference,
-                    process_step_name="Digital post udsendt",
+                    process_step_name="Velkomstbrev sendt",
                     failure=None,
                     process_name=process_name,
                 )

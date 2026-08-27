@@ -46,7 +46,7 @@ def main():
 
     # Resolve the "form submitted in time" step so we can check actual submission, rather
     # than assuming a still-running run means the citizen never submitted.
-    formular_step_name = "Formular indsendt inden for tidsfristen"
+    formular_step_name = "Formular indsendt"
     formular_step_id = next(
         (
             step.get("id")
