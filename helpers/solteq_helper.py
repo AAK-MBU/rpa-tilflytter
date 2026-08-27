@@ -232,10 +232,10 @@ def check_and_handle_event(solteq_app: SolteqTandApp, cpr: str, solteq_tand_db_o
         if not solteq_tand_db_object.get_list_of_events(filters=unprocessed_filters):
             raise BusinessError(f"Event '{event_name}' not found on citizen.")
 
-        if event_name == "Ny tilflytter"
+        if event_name == "Ny tilflytter":
             target_values = {event_name, "Kendt tilflytter", "Nej"}
 
-        elif event_name == "Kendt tilflytter"
+        elif event_name == "Kendt tilflytter":
             target_values = {event_name, "Kendt tilflytter", "Nej"}
 
         solteq_app.process_target_event(target_values=target_values)
