@@ -13,11 +13,46 @@ import time
 import datetime
 from dateutil.relativedelta import relativedelta
 
+import uiautomation as auto
+
 from mbu_rpa_core.exceptions import BusinessError
 from mbu_solteqtand_shared_components.application import SolteqTandApp
 from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
 logger = logging.getLogger(__name__)
+
+
+def refocus_patient_window(solteq_app: SolteqTandApp):
+    """
+    Re-point solteq_app.app_window at the patient window (FormPatient).
+
+    SolteqTandApp inherits from every handler in mbu_solteqtand_shared_components, so it
+    is a single object with a single self.app_window that all of them read and write.
+    The appointment handler reassigns it to the booking pane it just edited
+    (`self.app_window = booking_control` in appointment.py) and never restores it, so the
+    next handler that navigates the patient card searches the booking pane's subtree
+    instead of the patient window. open_tab() then finds no tab, returns None, and dies
+    on "'NoneType' object has no attribute 'GetPattern'" - even though the patient window
+    is open and the booking update succeeded. close_patient_window() in the shared library
+    already works around the same leak by re-acquiring the window; this does it for the
+    steps in between.
+
+    Call this after any appointment/booking action, before touching the patient card again.
+    """
+
+    logger.info("Re-acquiring the patient window (FormPatient).")
+
+    patient_window = solteq_app.wait_for_control(
+        auto.WindowControl,
+        {"AutomationId": "FormPatient"},
+        search_depth=2,
+        timeout=15,
+    )
+
+    patient_window.SetFocus()
+    solteq_app.app_window = patient_window
+
+    return patient_window
 
 
 # pylint: disable=protected-access
@@ -409,6 +444,10 @@ def check_and_set_booking_status(solteq_app: SolteqTandApp, solteq_tand_db_objec
     # Approve the change despite the "no availability for chair/behandler" warning
     # that the Z - Tilflytter admin booking always triggers ("Godkend trods advarsel").
     solteq_app.change_appointment_status_handle_warning(appointment_control=booking_control, set_status=status_text, warning_button="ButtonOk")
+
+    # The booking handler leaves app_window pointing at the booking pane - put it back on
+    # the patient window so the next step (journal note, events, ...) can navigate the card.
+    refocus_patient_window(solteq_app)
 
     time.sleep(3)  # Wait for the status change to be registered in the database
 

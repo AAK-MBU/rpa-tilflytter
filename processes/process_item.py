@@ -259,14 +259,6 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                     process_name=process_name,
                 )
 
-                logger.info("Creating administrative note for welcome letter")
-                solteq_helper.check_and_create_journal_note(
-                    solteq_app=solteq_app,
-                    solteq_tand_db_object=solteq_tand_db_object,
-                    cpr=citizen_cpr,
-                    note_message="Velkomstbrev er sendt. Se Dokumenter",
-                )
-
             else:
                 logger.info(
                     "Citizen and parents are not registered for Digital Post - manual send flow"
@@ -335,6 +327,14 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                     failure=None,
                     process_name=process_name,
                 )
+
+            logger.info("Creating administrative note for welcome letter")
+            solteq_helper.check_and_create_journal_note(
+                solteq_app=solteq_app,
+                solteq_tand_db_object=solteq_tand_db_object,
+                cpr=citizen_cpr,
+                note_message="Administrativt notat 'Velkomstbrev er sendt. Se Dokumenter'",
+            )
 
             # STEP 5 - flag citizens who have reached 21 years 9 months. This applies on both
             # the digital and manual paths, so the age is recorded however the letter was sent.
