@@ -293,9 +293,9 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                         "Manual welcome letter send not yet completed - pausing item and awaiting manual send"
                     )
 
-                    # The BusinessError handler reports the step (as pending, with the
+                    # The BusinessError handler reports the step (as failed, with the
                     # work item id attached so the dashboard can rerun it).
-                    current_step_status = "pending"
+                    current_step_status = "failed"
 
                     raise BusinessError("Afventer manuel udsendelse af velkomstbrev.")
 
