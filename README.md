@@ -77,10 +77,12 @@ flowchart TD
 
 The RPA can't sit and wait for a human (approval or a manual letter send), so it **pauses and is resumed later**. Two pause points exist:
 
-| Pause | When | Resume condition (checked by the service) |
+| Pause | When | Ready-to-continue condition (checked by **both** the service and the RPA) |
 |---|---|---|
-| **Under-18 approval** | Citizen < 18 — the welcome letter needs Tandplejen approval first | Event `"Tilflytter - Godkend afsendelse af velkomstbrev"` is **handled/archived** |
+| **Under-18 approval** | Citizen < 18 — the welcome letter needs Tandplejen approval first | The `Velkomstbrev` **booking reminder's aftalestatus is 638** ("Tilflytter - Afsendelse godkendt"), looked up on future bookings only |
 | **Manual send** | Citizen **not** on Digital Post — letter must be sent by hand | Event `"Tilflytter - Ikke tilmeldt digital post - udsend brev manuelt"` handled **AND** a `Velkomstbrev` document exists |
+
+**Approval is a booking status, not an event.** The RPA creates the `"Tilflytter - Godkend afsendelse af velkomstbrev"` event so the dentist has the task in their list, but they approve by **setting the booking reminder's aftalestatus to 638** and normally leave that event untouched. So neither side may gate on the event being handled — `solteq_helper.welcome_booking_is_approved()` and the service's `_welcome_booking_is_approved()` both read the booking status, and **they have to stay in agreement**: if the service resumes on a signal the RPA does not accept, the item is just re-paused on every 5-minute pass. (The RPA additionally accepts status **640**, "Velkomstbrev udsendt", so a re-run after the letter has gone out doesn't read a sent letter as "not yet approved".)
 
 **How pause works:** the RPA raises `BusinessError`. `process_item` catches it, reports the step it stopped on to the dashboard, and re-raises; `main.py` then hands `item.pending_user` to `handle_error`, which calls it with the serialized error so the work item's message carries the full error payload.
 

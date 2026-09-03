@@ -153,12 +153,14 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                 event_name=tilflytter_event_name,
             )
 
-            # Under 18: create the approval event and pause here until Tandplejen approves it.
-            # Approving it in Solteq archives the event; a separate service then re-queues the
-            # item, and on the next run this check passes so the flow continues to send.
+            # Under 18: create the approval event so Tandplejen has the task in their list,
+            # then pause until they approve. Approval is given on the booking reminder - its
+            # aftalestatus goes to 638 - and NOT by handling the event, which the dentist
+            # normally leaves untouched. So the booking status is what decides here, which is
+            # also how the service decides the item is ready to resume.
             if awaiting_approval:
                 logger.info(
-                    "Citizen is under 18 - handling 'Godkend afsendelse af velkomstbrev' event"
+                    "Citizen is under 18 - creating the 'Godkend afsendelse af velkomstbrev' event"
                 )
                 approve_document_event = "Tilflytter - Godkend afsendelse af velkomstbrev"
                 current_step_name = "Velkomstbrev godkendt"
@@ -170,13 +172,14 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                     cpr=citizen_cpr,
                 )
 
-                if not solteq_helper.is_event_processed(
+                if not solteq_helper.welcome_booking_is_approved(
                     solteq_tand_db_object=solteq_tand_db_object,
                     cpr=citizen_cpr,
-                    event_name=approve_document_event,
+                    booking_text=booking_text,
                 ):
                     logger.info(
-                        "Welcome document sending not yet approved - pausing item and awaiting confirmation"
+                        "Welcome letter sending not yet approved on the booking reminder - "
+                        "pausing item and awaiting approval"
                     )
 
                     # The BusinessError handler reports the step (as pending, with the
@@ -188,7 +191,7 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                     )
 
                 logger.info(
-                    "Welcome document sending has been approved - continuing to send"
+                    "Welcome letter sending has been approved on the booking reminder - continuing to send"
                 )
 
             helper_functions.handle_process_dashboard(

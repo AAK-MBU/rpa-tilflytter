@@ -28,6 +28,12 @@ logger = logging.getLogger(__name__)
 JOURNAL_NOTE_CONFIRM_TIMEOUT_SECONDS = 30
 JOURNAL_NOTE_CONFIRM_POLL_SECONDS = 3
 
+# Solteq stores the booking aftalestatus as a numeric id (the UI dropdown selects it by text
+# label). Approval of an under-18 welcome letter is 638 "Tilflytter - Afsendelse godkendt";
+# 640 "Tilflytter - Velkomstbrev udsendt" is set once the letter has gone out, so it means
+# the send was approved too.
+APPROVED_BOOKING_STATUS_IDS = [638, 640]
+
 
 def refocus_patient_window(solteq_app: SolteqTandApp):
     """
@@ -484,6 +490,49 @@ def journal_note_db_value(note_message: str) -> str:
     """
 
     return note_message.replace("'", "")
+
+
+def welcome_booking_is_approved(solteq_tand_db_object: SolteqTandDatabase, cpr: str, booking_text: str = "Velkomstbrev") -> bool:
+    """
+    Whether Tandplejen has approved sending the welcome letter to an under-18 citizen.
+
+    Approval is given by setting the "Velkomstbrev" booking reminder's aftalestatus to 638
+    ("Tilflytter - Afsendelse godkendt"). The event the robot creates for the dentist is only
+    a task-list entry: they approve on the booking and normally leave the event untouched, so
+    the booking status is the signal - never whether the event was handled.
+
+    Mirrors _welcome_booking_is_approved in
+    service-tandplejen-procesoverblik/helpers/tilflytter_afventer_udsendelse.py, which is how
+    the 5-minute service decides to resume a paused item. The two must agree: if the service
+    resumes on a signal this does not accept, the item is simply re-paused on every pass.
+
+    640 counts as approved as well, so the check stays idempotent - once the letter is sent the
+    booking moves on to "Velkomstbrev udsendt", and a later re-run must not read that as "not
+    yet approved" and pause a citizen whose letter already went out.
+
+    Only future bookings count: the reminder is created 3 months out, so restricting the lookup
+    keeps an abandoned reminder from an earlier tilflytter run from reading as an approval of
+    this one. (Consequence, shared with the service: if the reminder date itself passes while
+    the item is paused, the approval becomes invisible to both.) b.Status is not in the SELECT
+    of get_list_of_bookings, but it can still be filtered on - a match is the approval.
+    """
+
+    approved_bookings = solteq_tand_db_object.get_list_of_bookings(
+        filters={
+            "p.cpr": cpr,
+            "b.BookingText": booking_text,
+            "b.Status": APPROVED_BOOKING_STATUS_IDS,
+            "b.StartTime": (">=", datetime.datetime.now()),
+        }
+    )
+
+    logger.info(
+        "Found %d approved '%s' booking(s) for citizen.",
+        len(approved_bookings),
+        booking_text,
+    )
+
+    return bool(approved_bookings)
 
 
 def check_and_create_journal_note(solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, cpr: str, note_type: str, note_message: str):
