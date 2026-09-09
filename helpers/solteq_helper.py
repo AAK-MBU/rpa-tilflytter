@@ -35,6 +35,26 @@ JOURNAL_NOTE_CONFIRM_POLL_SECONDS = 3
 APPROVED_BOOKING_STATUS_IDS = [638, 640]
 
 
+def run_event_floor(event_created_date: str) -> datetime.datetime:
+    """
+    The earliest event date that belongs to the current tilflytter run.
+
+    Every event the RPA looks at or creates for a citizen has to be scoped to the run being
+    processed, because a citizen who once moved away and has now returned still carries the
+    tilflytter events from their earlier move. The tilflytter event that started this run is
+    that boundary, floored to midnight so an event stamped with a date rather than a full
+    timestamp still counts.
+
+    Args:
+        event_created_date: the tilflytter event's currentStateDate, ISO formatted - as
+            queue_handler stores it on the work item.
+    """
+
+    return datetime.datetime.fromisoformat(event_created_date).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+
 def refocus_patient_window(solteq_app: SolteqTandApp):
     """
     Re-point solteq_app.app_window at the patient window (FormPatient).
@@ -234,51 +254,47 @@ def welcome_document_exists(solteq_tand_db_object: SolteqTandDatabase, cpr: str,
     return bool(get_welcome_documents(solteq_tand_db_object, cpr, welcome_document_filename))
 
 
-def check_and_handle_event(solteq_app: SolteqTandApp, cpr: str, solteq_tand_db_object: SolteqTandDatabase, event_name):
+def check_and_handle_event(solteq_app: SolteqTandApp, cpr: str, solteq_tand_db_object: SolteqTandDatabase, event_name, event_id: int):
     """
     Process the citizen's newly created tilflytter event in Solteq Tand.
 
     Idempotent: an already-processed (archived) event is left alone. If the event is not
     present at all - neither processed nor pending - a BusinessError is raised, since the
     citizen is expected to have it before this runs.
+
+    The event is identified by event_id, never by name alone. A citizen who moved away and
+    has now returned keeps the tilflytter events from their earlier move, so "does this
+    citizen have an archived 'Ny tilflytter' event" is always true for them, and the RPA
+    would skip processing the new one. event_id comes from the work item, put there by
+    queue_handler when it found this specific event.
     """
 
-    logger.info("Checking if event is already processed.")
+    logger.info("Checking if event %s is already processed.", event_id)
 
-    # Processing an event flips e.archived from 0 to 1, so an archived event
-    # with this state text means it has already been processed.
+    # Processing an event flips e.archived from 0 to 1, so this event being archived
+    # means it has already been processed.
     filters = {
-        "e.currentStateText": [
-            f"{event_name}",
-        ],
+        "e.eventId": event_id,
         "p.cpr": cpr,
         "e.archived": 1,
     }
 
-    events = solteq_tand_db_object.get_list_of_events(
-        filters=filters,
-        order_by="e.currentStateDate",
-        order_direction="DESC",
-    )
+    events = solteq_tand_db_object.get_list_of_events(filters=filters)
 
-    print()
-
-    print(f"len of events: {len(events)}")
-
-    logger.info(f"Found {len(events)} existing processed tilflytter events.")
+    logger.info("Found %d processed rows for event %s.", len(events), event_id)
 
     if not events:
-        # Ensure the citizen actually has the unprocessed event before handling it
+        # Ensure the event is actually there and unprocessed before handling it
         unprocessed_filters = {
-            "e.currentStateText": [
-                f"{event_name}",
-            ],
+            "e.eventId": event_id,
             "p.cpr": cpr,
             "e.archived": 0,
         }
 
         if not solteq_tand_db_object.get_list_of_events(filters=unprocessed_filters):
-            raise BusinessError(f"Event '{event_name}' not found on citizen.")
+            raise BusinessError(
+                f"Event '{event_name}' (id {event_id}) not found on citizen."
+            )
 
         if event_name == "Ny tilflytter":
             target_values = {event_name, "Ny tilflytter", "Nej"}
@@ -291,7 +307,7 @@ def check_and_handle_event(solteq_app: SolteqTandApp, cpr: str, solteq_tand_db_o
         time.sleep(3)  # Wait for the event state to be registered in the database
 
         if not solteq_tand_db_object.get_list_of_events(filters=filters):
-            raise RuntimeError("Event processing failed.")
+            raise RuntimeError(f"Event processing failed for event id {event_id}.")
 
         logger.info("Event was processed successfully.")
 
@@ -299,18 +315,24 @@ def check_and_handle_event(solteq_app: SolteqTandApp, cpr: str, solteq_tand_db_o
         logger.info("Event already processed, skipping processing.")
 
 
-def check_and_create_new_event(solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, event_name: str, cpr: str):
+def check_and_create_new_event(solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, event_name: str, cpr: str, created_after: datetime.datetime):
     """
-    Check if an event exists in Solteq Tand, and create it if not
+    Check if an event exists in Solteq Tand, and create it if not.
+
+    created_after scopes the lookup to the current tilflytter run (see run_event_floor).
+    Without it, a citizen who moved away and has now returned still carries the events the
+    RPA created during their earlier move, so this would find one, decide the event already
+    exists, and never create it for the current run.
     """
 
-    logger.info("Checking if event is already processed.")
+    logger.info("Checking if event '%s' already exists for this run.", event_name)
 
     filters = {
         "e.currentStateText": [
             f"{event_name}",
         ],
-        "p.cpr": cpr
+        "p.cpr": cpr,
+        "e.currentStateDate": (">=", created_after),
     }
 
     events = solteq_tand_db_object.get_list_of_events(
@@ -333,15 +355,20 @@ def check_and_create_new_event(solteq_app: SolteqTandApp, solteq_tand_db_object:
         logger.info("Event already exists.")
 
 
-def is_event_processed(solteq_tand_db_object: SolteqTandDatabase, cpr: str, event_name: str) -> bool:
+def is_event_processed(solteq_tand_db_object: SolteqTandDatabase, cpr: str, event_name: str, created_after: datetime.datetime) -> bool:
     """
-    Return True if the given event has been processed (archived) for the citizen,
-    False if it exists but is not yet processed.
+    Return True if the given event has been processed (archived) for the citizen during the
+    current tilflytter run, False if it exists but is not yet processed.
 
     Raises BusinessError if the event does not exist at all: the caller creates the
     event before checking, so a missing event is an anomaly to flag rather than a
     legitimate "not yet processed" state to silently wait on. Processing/approving
     an event in Solteq Tand flips e.archived from 0 to 1.
+
+    created_after scopes the lookup to this run (see run_event_floor), and here that matters
+    most: an archived event left over from an earlier move would otherwise read as "the task
+    is done" - e.g. making the RPA believe a welcome letter was hand-delivered when nobody
+    has touched it.
     """
 
     filters = {
@@ -349,6 +376,7 @@ def is_event_processed(solteq_tand_db_object: SolteqTandDatabase, cpr: str, even
             f"{event_name}",
         ],
         "p.cpr": cpr,
+        "e.currentStateDate": (">=", created_after),
     }
 
     events = solteq_tand_db_object.get_list_of_events(filters=filters)

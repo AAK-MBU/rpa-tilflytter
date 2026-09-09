@@ -39,6 +39,19 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
     process_name = "Tilflytter til Aarhus Kommune"
 
     tilflytter_event_name = item_data.get("event_name")
+    tilflytter_event_id = item_data.get("event_id")
+
+    # Everything this run looks at or creates in Solteq is scoped to the date this run
+    # started: a citizen who moved away and has now returned still carries the events from
+    # their earlier move, and those must not be mistaken for this run's work.
+    event_created_date = item_data.get("event_created_date")
+
+    assert event_created_date, (
+        "Item data must carry event_created_date to scope this run's Solteq events - "
+        "re-populate the queue if the item predates this field"
+    )
+
+    event_floor = solteq_helper.run_event_floor(event_created_date)
 
     # Which dashboard step a BusinessError raised below belongs to, and the status to
     # report it with. Updated as the flow moves from step to step; the BusinessError
@@ -66,6 +79,7 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                 solteq_tand_db_object=solteq_tand_db_object,
                 event_name="Tilflytter - Formular ikke indsendt inden for tidsfristen",
                 cpr=citizen_cpr,
+                created_after=event_floor,
             )
 
             helper_functions.handle_process_dashboard(
@@ -82,6 +96,7 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                 solteq_tand_db_object=solteq_tand_db_object,
                 event_name="Tilflytter - Tilflytter 21 år og 9 måneder - Formular ikke udfyldt",
                 cpr=citizen_cpr,
+                created_after=event_floor,
             )
 
             helper_functions.handle_process_dashboard(
@@ -151,6 +166,7 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                 cpr=citizen_cpr,
                 solteq_tand_db_object=solteq_tand_db_object,
                 event_name=tilflytter_event_name,
+                event_id=tilflytter_event_id,
             )
 
             # Under 18: create the approval event so Tandplejen has the task in their list,
@@ -170,6 +186,7 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                     solteq_tand_db_object=solteq_tand_db_object,
                     event_name=approve_document_event,
                     cpr=citizen_cpr,
+                    created_after=event_floor,
                 )
 
                 if not solteq_helper.welcome_booking_is_approved(
@@ -280,12 +297,14 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                     solteq_tand_db_object=solteq_tand_db_object,
                     event_name=manual_send_event,
                     cpr=citizen_cpr,
+                    created_after=event_floor,
                 )
 
                 event_handled = solteq_helper.is_event_processed(
                     solteq_tand_db_object=solteq_tand_db_object,
                     cpr=citizen_cpr,
                     event_name=manual_send_event,
+                    created_after=event_floor,
                 )
                 document_exists = solteq_helper.welcome_document_exists(
                     solteq_tand_db_object=solteq_tand_db_object, cpr=citizen_cpr

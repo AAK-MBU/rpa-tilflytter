@@ -8,8 +8,10 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime
 
 from automation_server_client import Workqueue
+from dateutil.relativedelta import relativedelta
 from mbu_solteqtand_shared_components.database.db_handler import SolteqTandDatabase
 
 from helpers import config, pre_process_checks
@@ -17,6 +19,11 @@ from helpers import config, pre_process_checks
 SOLTEQ_TAND_DB_CONN_STRING = os.getenv("DBCONNECTIONSTRINGSOLTEQTAND")
 
 logger = logging.getLogger(__name__)
+
+# Only pick up recent tilflytter events. A citizen who moved away and has now returned keeps
+# their old "Ny/Kendt tilflytter" events on their record, and a stale unarchived one would
+# otherwise be queued as if they had just moved here.
+EVENT_MAX_AGE_MONTHS = 3
 
 
 def retrieve_items_for_queue() -> list[dict]:
@@ -35,6 +42,10 @@ def retrieve_items_for_queue() -> list[dict]:
             "Kendt tilflytter",
         ],
         "e.archived": 0,
+        "e.currentStateDate": (
+            ">=",
+            datetime.now() - relativedelta(months=EVENT_MAX_AGE_MONTHS),
+        ),
     }
 
     events = db_handler.get_list_of_events(
@@ -58,9 +69,13 @@ def retrieve_items_for_queue() -> list[dict]:
 
         event_created_date = ev.get("currentStateDate")
 
+        # event_id identifies THIS tilflytter event. A returning citizen has more than one
+        # event with the same name, so the id is what lets the RPA verify it archived the
+        # right one instead of reading an old move as "already handled".
         citizen_dict = {
             "cpr": citizen_cpr,
             "name": ev.get("fullName"),
+            "event_id": ev.get("eventId"),
             "event_name": ev_title,
             "event_created_date": event_created_date.isoformat(),
             "event_last_modified": ev.get("timestamp").isoformat(),

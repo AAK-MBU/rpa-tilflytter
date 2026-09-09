@@ -146,7 +146,12 @@ def main():
     for run in all_process_runs:
         cpr = run["meta"]["cpr"]
 
-        item_data = {"cpr": cpr}
+        # The outcome queues carry the run's own start date so process_item can scope this
+        # run's Solteq events (a returning citizen still has the events from their earlier
+        # move). Undatable runs fall back to today, which still excludes the old ones.
+        run_started = run_created_date(run) or today
+
+        item_data = {"cpr": cpr, "event_created_date": run_started.isoformat()}
 
         # The deadline runs from when the welcome letter was actually sent
         # (recorded in the run meta), not from when the process run started.
