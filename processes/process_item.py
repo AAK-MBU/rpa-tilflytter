@@ -350,6 +350,8 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                     process_name=process_name,
                 )
 
+            current_step_name = "Tilflytter under 21 år og 9 måneder"
+
             logger.info("Creating administrative note for welcome letter")
             solteq_helper.check_and_create_journal_note(
                 solteq_app=solteq_app,
@@ -362,7 +364,6 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
             # STEP 5 - flag citizens who have reached 21 years 9 months. This applies on both
             # the digital and manual paths, so the age is recorded however the letter was sent.
             logger.info("Step 5 - Handling tilflytter age step in process dashboard")
-            current_step_name = "Tilflytter under 21 år og 9 måneder"
 
             if age_category == "21y9m_and_older":
                 helper_functions.handle_process_dashboard(

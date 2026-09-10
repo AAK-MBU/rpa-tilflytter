@@ -28,6 +28,11 @@ logger = logging.getLogger(__name__)
 JOURNAL_NOTE_CONFIRM_TIMEOUT_SECONDS = 30
 JOURNAL_NOTE_CONFIRM_POLL_SECONDS = 3
 
+# The journal a note is written on. Solteq matches it by prefix, so this also matches
+# "Generel Journal - Påbegyndt - 11-11-2024". Not every citizen has one - see
+# check_and_create_journal_note.
+JOURNAL_NOTE_DEPARTMENT = "Generel Journal - Påbegyndt"
+
 # Solteq stores the booking aftalestatus as a numeric id (the UI dropdown selects it by text
 # label). Approval of an under-18 welcome letter is 638 "Tilflytter - Afsendelse godkendt";
 # 640 "Tilflytter - Velkomstbrev udsendt" is set once the letter has gone out, so it means
@@ -563,7 +568,7 @@ def welcome_booking_is_approved(solteq_tand_db_object: SolteqTandDatabase, cpr: 
     return bool(approved_bookings)
 
 
-def check_and_create_journal_note(solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, cpr: str, note_type: str, note_message: str):
+def check_and_create_journal_note(solteq_app: SolteqTandApp, solteq_tand_db_object: SolteqTandDatabase, cpr: str, note_type: str, note_message: str, department: str = JOURNAL_NOTE_DEPARTMENT):
     """
     Check if a journal note exists in Solteq Tand, and create it if not.
 
@@ -571,6 +576,10 @@ def check_and_create_journal_note(solteq_app: SolteqTandApp, solteq_tand_db_obje
     note text, quoted the way Solteq displays it ("'Velkomstbrev er sendt. Se Dokumenter'").
     The UI is given the two joined together, the database is queried on the message alone -
     see journal_note_db_value.
+
+    department is the journal to write the note on, passed explicitly so the lookup and the
+    error message below can never name different journals. A citizen without that journal
+    raises a BusinessError rather than failing the run - see below.
     """
 
     logger.info("Checking if journal note already exists.")
@@ -585,7 +594,24 @@ def check_and_create_journal_note(solteq_app: SolteqTandApp, solteq_tand_db_obje
     journal_notes = solteq_tand_db_object.get_list_of_journal_notes(filters=filters)
 
     if not journal_notes:
-        solteq_app.create_journal_note(note_message=f"{note_type} {note_message}", checkmark_in_complete=True)
+        try:
+            solteq_app.create_journal_note(
+                note_message=f"{note_type} {note_message}",
+                checkmark_in_complete=True,
+                department=department,
+            )
+
+        except ValueError as e:
+            # _set_department_journals documents ValueError as exactly one condition: the
+            # citizen has no journal whose name starts with `department`, so there is nothing
+            # to write the note on. That needs a human to open the journal in Solteq - a retry
+            # will never fix it - so raise it as a business error. The item then goes to
+            # pending user action and the dashboard step it is tied to gets the failure with a
+            # rerun target, instead of the run failing with an error mail. (If a future version
+            # of the shared library raises ValueError for anything else, this needs revisiting.)
+            raise BusinessError(
+                f"Journalnotatet kan ikke oprettes - borgeren har ingen '{department}' journal."
+            ) from e
 
         # Wait for the journal note to be registered in the database, re-checking every few
         # seconds rather than giving up after the first look.
