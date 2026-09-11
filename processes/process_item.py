@@ -383,8 +383,8 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                     process_name=process_name,
                 )
 
-            logger.info("Closing patient window")
-            solteq_app.close_patient_window()
+        logger.info("Closing patient window")
+        solteq_app.close_patient_window()
 
     except BusinessError as be:
         logger.info(f"BusinessError: {be}")
