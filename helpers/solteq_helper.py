@@ -259,6 +259,50 @@ def welcome_document_exists(solteq_tand_db_object: SolteqTandDatabase, cpr: str,
     return bool(get_welcome_documents(solteq_tand_db_object, cpr, welcome_document_filename))
 
 
+def resolve_tilflytter_event_id(solteq_tand_db_object: SolteqTandDatabase, cpr: str, event_name: str, created_after: datetime.datetime) -> int | None:
+    """
+    Find the id of this run's tilflytter event, for work items that do not carry one.
+
+    queue_handler puts event_id on every new work item, but items queued before that field
+    existed have none - and several of those are paused mid-flow, waiting for an under-18
+    welcome letter to be approved. Without an id, check_and_handle_event can match nothing
+    and reports the event as missing, so the item can never get past step 2.
+
+    Resolving by name is safe here precisely because created_after bounds it to this run
+    (see run_event_floor): the events from an earlier move fall outside the window. The most
+    recent match wins, and archived events count - for a paused item the tilflytter event was
+    handled long ago, and that is exactly the row we need to point at.
+
+    Returns None if the citizen has no such event in this run's window; the caller then
+    reports it missing, which is the correct outcome.
+    """
+
+    events = solteq_tand_db_object.get_list_of_events(
+        filters={
+            "e.currentStateText": [
+                f"{event_name}",
+            ],
+            "p.cpr": cpr,
+            "e.currentStateDate": (">=", created_after),
+        },
+        order_by="e.currentStateDate",
+        order_direction="DESC",
+    )
+
+    if not events:
+        logger.warning(
+            "Could not resolve an event id for '%s' within this run's window.", event_name
+        )
+
+        return None
+
+    event_id = events[0]["eventId"]
+
+    logger.info("Resolved event '%s' to id %s.", event_name, event_id)
+
+    return event_id
+
+
 def check_and_handle_event(solteq_app: SolteqTandApp, cpr: str, solteq_tand_db_object: SolteqTandDatabase, event_name, event_id: int):
     """
     Process the citizen's newly created tilflytter event in Solteq Tand.

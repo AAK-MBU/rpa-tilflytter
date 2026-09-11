@@ -159,6 +159,22 @@ def process_item(item_data: dict, item_reference: str, item_id: int):
                 booking_text=booking_text,
             )
 
+            # Work items queued before event_id existed carry no id. Several of those are
+            # paused waiting for an under-18 approval, and without an id step 2 below can match
+            # no event and reports it missing - leaving the item stuck for good. Resolve the id
+            # from Solteq instead; the run window makes the lookup unambiguous.
+            if not tilflytter_event_id:
+                logger.warning(
+                    "Work item has no event_id - resolving this run's tilflytter event from Solteq."
+                )
+
+                tilflytter_event_id = solteq_helper.resolve_tilflytter_event_id(
+                    solteq_tand_db_object=solteq_tand_db_object,
+                    cpr=citizen_cpr,
+                    event_name=tilflytter_event_name,
+                    created_after=event_floor,
+                )
+
             # STEP 2 - process the tilflytter event in Solteq Tand
             logger.info("Step 2 - Handling tilflytter event in Solteq")
             solteq_helper.check_and_handle_event(
